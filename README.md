@@ -2,6 +2,8 @@
 
 An independent Sanger sequencing analysis app for bulk samples and clone screening, with specified SNP signals, bounded indel mixture fitting, continuous chromatograms, and publication figure exports.
 
+**Live app:** https://assured-traceedit.vercel.app/
+
 ## Run locally
 
 Python 3.12 recommended:
