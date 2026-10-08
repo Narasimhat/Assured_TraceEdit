@@ -24,8 +24,9 @@ Import this repository into Vercel, use the repository root, and select the Flas
 ## Workflow
 
 1. Select a matching wild-type AB1 and one or more sample AB1 files.
+   Optionally upload an **Assured Design HTML report** to populate gRNAs (without PAM) and ssODNs. HTML is parsed locally in a detached, inert template and is never displayed or sent to the server. If multiple designs or donors are present, select the intended option. Import reads the gRNA and donor sections, excluding primers, wild-type rows, and historical records. Import clears prior cut/SNP coordinates to avoid carrying them into a new design.
 2. Enter one or two SpCas9 protospacers without PAM, or explicit cut-after positions in the control read.
-3. Optionally enter substitutions such as `C247T`. Coordinates are 1-based **control-read positions**, not genome coordinates or protein residue numbers. A substitution donor can be mapped to identify candidate SNPs; review those coordinates.
+3. Paste an ssODN into the always-visible donor field, or use the imported donor. Either DNA strand is supported; whitespace is ignored. **Analyze automatically maps a nonempty donor to the control first**, filling its SNPs; the separate Map button lets you review them before analysis. Mapping failures stop analysis. Alternatively enter substitutions such as `C247T`. Coordinates are 1-based **control-read positions**, not genome coordinates or protein residue numbers. The current model supports substitution donors, not donor insertions/deletions.
 4. Analyze. Each sample is a separate stateless request. Inspect QC warnings, alternate-channel signals, and continuous traces.
 5. Download JSON/CSV. Select up to 12 successful samples for PDF/SVG/600-dpi PNG figures and an all-sample PDF report. A provenance manifest records source hashes, window scaling, and selection.
 
@@ -60,3 +61,5 @@ python synthetic.py
 ```
 
 The synthetic generator writes a control and a 55% alternate-signal mixture into ignored `tmp/synthetic/`, plus analysis settings. No experimental data is distributed. Tests cover orientation, offset handling, simple indel/SNP mixtures, donor mapping, ABIF upload, continuous windows, stateless exports, and invalid input.
+
+Frontend importer/workflow regression tests use `pnpm install` followed by `pnpm test` (Node.js). These check annotated report parsing, separate donor/design choices, PAM/primer exclusion, inert HTML handling, automatic donor mapping, and mapping failure behavior.

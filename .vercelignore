@@ -1,0 +1,6 @@
+node_modules
+tests
+tmp
+.pytest_cache
+__pycache__
+test_*.py
