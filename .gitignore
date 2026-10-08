@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.vercel/
+.env*
+!.env.example
+*.ab1
+*.abi
+*.scf
+*.zip
+results/
+uploads/
+output/
+tmp/
+node_modules/
