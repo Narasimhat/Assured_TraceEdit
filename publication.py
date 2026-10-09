@@ -89,91 +89,7 @@ def build_figure(bundle,indices,roots,out,title,centers,flank,labels):
     plt.close(fig)
     return height,manifest,caption
 
-def build_report(bundle,indices,out,title,height,caption,centers,labels):
-    styles=getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='SmallTrace',fontName='Helvetica',fontSize=8,leading=11,spaceAfter=6,textColor=colors.HexColor('#405258')))
-    styles.add(ParagraphStyle(name='CellTrace',fontName='Helvetica',fontSize=7,leading=9))
-    styles['Title'].fontSize=21;styles['Title'].leading=26;styles['Title'].alignment=0
-    styles['Heading2'].textColor=colors.HexColor('#126c61')
-    story=[]
-    p=lambda text,style='SmallTrace':Paragraph(escape(str(text)),styles[style])
-    story += [p(title,'Title'),p('TraceEdit | Continuous chromatogram figure and full-run review'),Spacer(1,12)]
-    results=bundle['results'];successful=[r for r in results if 'metrics' in r]
-    poor=sum(r['metrics']['r_squared']<.8 for r in successful)
-    story += [p('Run and scope','Heading2'),p(f"Saved run: {bundle['id']} | analysis timestamp: {bundle['created_utc']}"),
-              p(f"{len(results)} samples in the saved run; {len(successful)} analyzed; {len(results)-len(successful)} failed. {poor} analyzed samples have R-squared below 0.80."),
-              p(f"Selected for the figure: {len(indices)} samples plus a wild-type control. Selection is for display and is not a positivity call."),
-              p('Selected samples: '+', '.join(short_label(results[i]) for i in indices)),
-              p('Displayed sites: '+', '.join(f'{label} (control base {center})' for center,label in zip(centers,labels))),
-              p('The full-run tables retain unselected samples and all failed or review-required results.'),
-              p('Interpretation','Heading2'),
-              p('Per-site percentages are background-corrected alternate-channel signals. They are not calibrated allele or cell fractions. A high mixture-fit R-squared does not confirm the biological model. Separate SNPs cannot be phased by these Sanger mixtures.'),
-              p('Frameshift values are model proxies and do not prove loss of function. Mixed or low-quality traces, base-calling gaps, and complex indels can make a constant-offset display unreliable. The interface and figure keep weak/secondary peaks visible.'),
-              p('Figure processing','Heading2'),p(caption),
-              p('Methods','Heading2'),
-              p('Continuous plots use instrument-analyzed AB1 DATA9-12 dye channels and PLOC2 peak positions (PLOC1 fallback). Read orientation and base offset come from the saved TraceEdit analysis. Plotting does not change the inference results, introduce smoothing, or remove secondary peaks. Base-call quality is reported as Phred Q and can be low at a true mixed base.'),
-              p('The existing inference fits bounded indel and substitution proposals using nonnegative least squares. Consult the saved JSON for full parameters, scores, original source hashes, and limitations. This release is a research prototype and has not been independently validated as a quantitative assay.'),
-              p('Reproducibility','Heading2'),
-              p('Download vector PDF/SVG, a 600-dpi PNG, the export manifest, full analysis JSON, and sample CSV separately. Windows and SHA-256 hashes originate from uploaded AB1 files at analysis time. Export renders the browser-held results without re-uploading the original files; hashes are provenance records, not independent verification of an imported session.'),PageBreak(),
-              p('All-sample results','Heading2')]
-    variants=bundle.get('settings',{}).get('variants',[])
-    positions=[int(v['position']) for v in variants]
-    # Up to six supported variants stay in a separate long-form SNP table.
-    summary=[[p(x,'CellTrace') for x in ['Sample','QC','Indel signal','R-squared','Mean SNP signal']]]
-    for r in results:
-        m=r.get('metrics',{})
-        values=[short_label(r),r['status'].replace('_',' '),percent(m.get('indel_fraction')),
-                f"{m['r_squared']:.3f}" if m else '-',percent(m.get('mean_snp_signal'))]
-        summary.append([p(v,'CellTrace') for v in values])
-    table=LongTable(summary,colWidths=[143,103,76,64,91],repeatRows=1,hAlign='LEFT')
-    table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e7f1ed')),('VALIGN',(0,0),(-1,-1),'TOP'),
-                              ('BOTTOMPADDING',(0,0),(-1,-1),4),('TOPPADDING',(0,0),(-1,-1),4),
-                              ('LINEBELOW',(0,0),(-1,0),.6,colors.HexColor('#779d91')),
-                              ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f5f7f6')])]))
-    story.extend([table,Spacer(1,12)])
-    deletion_results = [r for r in results if r.get('deletion_evidence',{}).get('groups')]
-    if deletion_results:
-        story += [p('Deletion findings','Heading2'),p('These are fitted trace contributions, not confirmed allele or cell percentages. Sequence-identical proposals are combined. Positions refer to the control read, not the genome. The cut-site figure uses a constant upstream offset and does not show the deletion as a gap.')]
-        for r in deletion_results:
-            evidence = r['deletion_evidence']
-            story.append(p(short_label(r),'Heading3'))
-            story.append(p('; '.join(f"{g['size_bp']} bp deletion: {percent(g['fraction'])}" for g in evidence['size_distribution'] if g['fraction']>=.05)))
-            for g in evidence['groups']:
-                story.append(p(f"Representative deletion: bases {g['start']}-{g['end']} ({g['size_bp']} bp), {percent(g['fraction'])} contribution. {len(g['equivalent_intervals'])} breakpoint placement(s) produce the same repaired sequence."))
-                if 'expected_junction' in g:
-                    story.append(p('Expected junction: '+g['expected_junction'][:12]+' | '+g['expected_junction'][12:]))
-                    story.append(p('Observed calls: '+g['observed_calls'][:12]+' | '+g['observed_calls'][12:]))
-                    story.append(p(f"{g['matching_calls']}/{g['compared_calls']} calls match; minimum Q{g['min_quality']}. Whole-sample base calls cannot resolve mixed alleles."))
-    if positions:
-        story.extend([PageBreak(),p('Per-site SNP signals','Heading2'),p('Positions refer to the control read. The figure labels do not replace these coordinates. Unavailable measurements are shown as a dash.')])
-        snp_rows=[[p(x,'CellTrace') for x in ['Sample']+[str(v['position'])+': '+v['ref']+'>'+v['alt'] for v in variants]]]
-        for r in results:
-            lookup={v['position']:v for v in r.get('variants',[])}
-            snp_rows.append([p(short_label(r),'CellTrace')]+[p(percent(lookup[pos]['background_corrected_signal']) if pos in lookup else '-','CellTrace') for pos in positions])
-        snp_table=LongTable(snp_rows,colWidths=[150]+[327/len(positions)]*len(positions),repeatRows=1,hAlign='LEFT')
-        snp_table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e7f1ed')),('VALIGN',(0,0),(-1,-1),'TOP'),
-            ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
-            ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f5f7f6')])]))
-        story.append(snp_table)
-    story.extend([PageBreak(),p('Selected continuous chromatograms','Heading2')])
-    image_width=min(477,650*7.2/height)
-    story += [Image(str(out/'chromatogram_figure_600dpi.png'),width=image_width,height=image_width*height/7.2),
-              p('The standalone figure PDF and SVG contain vector traces for journal layout.'),PageBreak(),p('Sample QC and source identity','Heading2')]
-    for r in results:
-        detail=[p(short_label(r),'Heading3'),p(r['sample'])]
-        if 'metrics' not in r:detail.append(p('Failed: '+r.get('error','Unknown error')))
-        else:
-            detail += [p('Control: '+r['control']),p('QC: '+('; '.join(r['warnings']) if r['warnings'] else 'Implemented fit checks passed.'))]
-            for v in r['variants']:
-                detail.append(p(f"{v['ref']}{v['position']}{v['alt']}: raw alternate signal {percent(v['sample_alt_signal'])}; control background {percent(v['control_alt_signal'])}; corrected {percent(v['background_corrected_signal'])}."))
-            detail.append(p('Sample SHA-256: '+r.get('source_hashes',{}).get('sample','unavailable')))
-        story.append(KeepTogether(detail))
-    def footer(canvas,doc):
-        canvas.setFont('Helvetica',7);canvas.setFillColor(colors.HexColor('#657371'))
-        canvas.drawString(42,25,'TraceEdit | '+bundle['id']);canvas.drawRightString(A4[0]-42,25,str(doc.page))
-    doc=SimpleDocTemplate(str(out/'analysis_report.pdf'),pagesize=A4,rightMargin=42,leftMargin=42,topMargin=40,bottomMargin=42,
-                          title=title,author='TraceEdit')
-    doc.build(story,onFirstPage=footer,onLaterPages=footer)
+from visual_report import build_visual_report as build_report, build_deletion_figure
 
 def export_publication(bundle,indices,roots,out,title='Genome editing chromatograms',centers=None,flank=10,labels=None):
     if not isinstance(indices,list) or not 1<=len(indices)<=12 or any(type(i)!=int or not 0<=i<len(bundle['results']) for i in indices):
@@ -189,9 +105,12 @@ def export_publication(bundle,indices,roots,out,title='Genome editing chromatogr
     if len(labels)!=len(centers) or any(len(str(label))>35 for label in labels):raise ValueError('Provide one short label per displayed site.')
     out.mkdir(parents=True,exist_ok=True)
     with RENDER_LOCK,plt.rc_context(STYLE):
-        height,manifest,caption=build_figure(bundle,indices,roots,out,title,centers,int(flank),labels)
+        if any(bundle['results'][i].get('deletion_evidence',{}).get('groups') for i in indices):
+            height,manifest,caption=build_deletion_figure(bundle,indices,out,title)
+        else:
+            height,manifest,caption=build_figure(bundle,indices,roots,out,title,centers,int(flank),labels)
         build_report(bundle,indices,out,title,height,caption,centers,labels)
-    export={'run_id':bundle['id'],'exporter_version':'0.2.0','exported_utc':datetime.now(timezone.utc).isoformat(),'title':title,'indices':indices,
+    export={'run_id':bundle['id'],'exporter_version':'0.3.0','exported_utc':datetime.now(timezone.utc).isoformat(),'title':title,'indices':indices,
             'sample_labels':[short_label(bundle['results'][i]) for i in indices],'centers':centers,'site_labels':labels,
             'flank':int(flank),'processing':caption,'trace_sources':manifest,'formats':['vector PDF','vector SVG','PNG 600 dpi'],
             'selection_note':'Explicit display selection. No genotype or positivity assignment.'}
