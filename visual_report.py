@@ -119,6 +119,18 @@ def build_visual_report(bundle,indices,out,title,height,caption,centers,labels):
     table=Table(key_rows,colWidths=[32,239,240],repeatRows=1)
     table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e4eee9')),('VALIGN',(0,0),(-1,-1),'TOP'),('BOTTOMPADDING',(0,0),(-1,-1),5),('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f6f8f7')])]))
     story.append(table)
+    snps=[r for r in results if r.get('variants')]
+    if snps:
+        story.extend([p('Specified substitution evidence','Heading2'),p('Background-corrected alternate-channel signal, not allele counts. Intended-mutation labels are supplied with the analysis; other changes are not automatically classified as silent or blocking.')])
+        cells=[[p(t,'CellSmall') for t in ['Sample','Change','Annotation','Alt signal']]]
+        for r in snps:
+            target=r.get('target_variant') or bundle.get('settings',{}).get('target_variant')
+            for v in r['variants']:
+                label=('Intended: '+target['label']) if target and v['position']==target['position'] else 'Other specified change'
+                cells.append([p(r['_display_id'],'CellSmall'),p(f"{v['ref']}{v['position']}{v['alt']}",'CellSmall'),p(label,'CellSmall'),p(f"{v['background_corrected_signal']*100:.1f}%",'CellSmall')])
+        snp_table=Table(cells,colWidths=[50,75,305,80],repeatRows=1)
+        snp_table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e4eee9')),('VALIGN',(0,0),(-1,-1),'TOP')]))
+        story.append(snp_table)
     # Group the SAME repaired sequence only, and only for figure-selected reads.
     groups={}
     for i in indices:
@@ -135,8 +147,8 @@ def build_visual_report(bundle,indices,out,title,height,caption,centers,labels):
         story.extend([evidence_card(entry['g'],entry['r'],entry['members']),Spacer(1,14)])
     if not groups:
         story.extend([PageBreak(),p('Selected trace evidence','Heading2'),p('Marked positions follow the control read. Alternate-channel signal is not a calibrated allele fraction.')])
-        width=min(510,650*7.2/height)
-        story.append(Image(str(out/'chromatogram_preview.png'),width=width,height=width*height/7.2))
+        width=min(510,620*8.3/height)
+        story.append(Image(str(out/'chromatogram_preview.png'),width=width,height=width*height/8.3))
     story.extend([PageBreak(),p('QC & methods appendix','Heading2')])
     warnings=defaultdict(list)
     for r in results:

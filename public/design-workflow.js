@@ -3,6 +3,7 @@ let importedDesigns = [], mappedVariantText = '';
 function clearMappedVariants() {
   if (mappedVariantText && $('variants').value === mappedVariantText) $('variants').value = '';
   mappedVariantText = '';
+  $('target-variant').value=''; $('target-label').value='';
   $('donor-status').textContent = 'Donor changes will be mapped when you analyze, or click Map ssODN to control.';
 }
 $('donor').addEventListener('input',clearMappedVariants);

@@ -13,6 +13,7 @@ os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
 from flask import Flask, jsonify, request, send_file, send_from_directory
 import numpy as np
 from engine import read_ab1, analyze, donor_variants
+from edit_annotations import select_centers, target_from_settings
 from chromatograms import trace_window, COLORS
 
 HERE=Path(__file__).parent
@@ -85,9 +86,10 @@ def settings():
     for v in variants:
         if not isinstance(v,dict) or set(v)!={'position','ref','alt'} or type(v['position'])!=int or any(not isinstance(v[k],str) or len(v[k])!=1 for k in ('ref','alt')): raise ValueError('Each SNP needs position, ref, and alt.')
     centers=data.get('centers',[])
-    if not isinstance(centers,list) or len(centers)>2 or any(type(c)!=int or not 1<=c<=4000 for c in centers): raise ValueError('Display one or two control-read positions.')
+    if not isinstance(centers,list) or len(centers)>6 or any(type(c)!=int or not 1<=c<=4000 for c in centers): raise ValueError('Display up to six control-read positions.')
     flank=data.get('flank',10)
     if type(flank)!=int or not 6<=flank<=30: raise ValueError('Flank must be 6–30 bases.')
+    target_from_settings(data)
     return data
 
 @app.post('/api/donor')
@@ -100,7 +102,9 @@ def donor():
 def run():
     config=settings();control=uploaded('control');sample=uploaded('sample')
     result=analyze(control,sample,**{k:config[k] for k in ('guides','cut_positions','variants','max_deletion','max_insertion','window') if k in config})
-    centers=config.get('centers') or [v['position'] for v in result['variants'][:2]] or result['cuts_after_base'][:2]
+    target=target_from_settings(config)
+    result['target_variant']=target
+    centers=select_centers(result['variants'],result['cuts_after_base'],config.get('flank',10),config.get('centers'),target)
     oriented=sample.reverse() if result['alignment']['orientation']=='reverse-complement' else sample
     result['displays']={};result['display_errors']=[]
     for center in centers:
@@ -126,7 +130,7 @@ def validate_bundle(body):
                 if len(w['positions'])>61 or len(w['calls'])!=len(w['positions']) or w['end']-w['start']>60: raise ValueError('Invalid trace window.')
     indices=body.get('indices',[]);centers=body.get('centers',[])
     if not isinstance(indices,list) or not 1<=len(indices)<=12 or any(type(i)!=int or not 0<=i<len(results) for i in indices): raise ValueError('Select 1–12 figure samples.')
-    if not isinstance(centers,list) or not 1<=len(centers)<=2 or any(type(c)!=int for c in centers): raise ValueError('Choose one or two sites.')
+    if not isinstance(centers,list) or not 1<=len(centers)<=6 or any(type(c)!=int for c in centers): raise ValueError('Choose one to six sites.')
     for i in indices:
         if results[i].get('source_hashes',{}).get('control')!=results[indices[0]].get('source_hashes',{}).get('control'): raise ValueError('Figure samples must share the same control.')
         for c in centers:
