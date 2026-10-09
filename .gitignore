@@ -27,3 +27,4 @@ data/
 *sample_sheet.csv
 public/*sample_sheet.csv
 scripts/myd88_report.py
+.vercel
