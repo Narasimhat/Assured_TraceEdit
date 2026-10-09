@@ -1,5 +1,6 @@
 """Local-first Sanger analysis app with request-scoped trace processing."""
 import io
+import hashlib
 import json
 import os
 import re
@@ -53,7 +54,7 @@ def peaksplit_index(): return send_from_directory(HERE/'public'/'peaksplit','ind
 def peaksplit_assets(filename): return send_from_directory(HERE/'public'/'peaksplit',filename)
 
 @app.get('/api/health')
-def health(): return jsonify(status='ok',version='0.7.0',storage='hosted-stateless' if HOSTED else 'local-and-stateless')
+def health(): return jsonify(status='ok',version='0.7.0',engine_sha256=hashlib.sha256((HERE/'engine.py').read_bytes()).hexdigest(),storage='hosted-stateless' if HOSTED else 'local-and-stateless')
 
 def uploaded(role):
     file=request.files.get(role)

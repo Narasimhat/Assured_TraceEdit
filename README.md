@@ -1,5 +1,7 @@
 # ASSURED TraceEdit + Peaksplit
 
+**New: [Assured Analysis — run AssuredQC and TraceEdit together](https://assured-traceedit.vercel.app/unified.html).** One project setup, additive file selection, reviewed pairing, two separate engine results. See [workflow and limits](UNIFIED_ANALYSIS.md).
+
 An independent Sanger sequencing analysis app for bulk samples and clone screening, with specified SNP signals, bounded indel mixture fitting, continuous chromatograms, and publication figure exports.
 
 The app supports local execution and stateless hosted analysis. Experimental inventories, traces, extracted workbooks, sample sheets and generated reports are excluded from Git and deployment uploads.
