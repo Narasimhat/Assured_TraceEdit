@@ -5,3 +5,5 @@
 body[data-step="results"] .intro{display:none}body[data-step="results"] main{padding-top:24px}
 
 .hdr-card{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}.hdr-card>div{background:#eaf3f0;border-radius:8px;padding:14px}.hdr-card small{display:block;color:#536e65}.hdr-card strong{display:block;font-size:24px;color:#23584d}
+
+.goal-card{background:#e6f2ed;border:1px solid #b9d7c8;padding:20px;border-radius:12px;margin:16px 0}.goal-card>small,.goal-card>strong,.goal-card>span{display:block}.goal-card>strong{font-size:42px;color:#174f3e}.goal-card>span{font-size:12px;color:#7c581b}

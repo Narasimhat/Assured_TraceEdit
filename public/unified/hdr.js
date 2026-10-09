@@ -45,4 +45,32 @@ export function estimatedHdr(row,engine){
  if(equivalent)flags.push('The engine reports equivalent candidate sequences.');
  return {value:full,partial,status:flags.length?'Provisional model estimate':'Model estimate',reason:'Best-fit contribution of zero-length-change outcomes containing every mapped change of at least one donor, including blocking changes. Partial = other donor-change outcomes without a complete donor signature. '+flags.join(' ')+' No uncertainty interval or unique molecular composition is established.',method:'donor-compatible-outcome-union/1'};
 }
-export function hdrCard(row,engine){const h=estimatedHdr(row,engine),targets=targetsOf(row);const signals=targets.map(t=>engine==='aq'?row.aq?.markers?.find(v=>v.position===t.position&&v.alt===t.alt)?.raw:row.te?.variants?.find(v=>v.position===t.position&&v.alt===t.alt)?.sample_alt_signal);const valid=signals.length&&signals.every(Number.isFinite);const target=valid?(Math.min(...signals)===Math.max(...signals)?percent(signals[0]):`${percent(Math.min(...signals))}–${percent(Math.max(...signals))}`):'Not available';return `<div class="hdr-card"><div><small>Estimated HDR · best fit</small><strong>${h.value===null?esc(h.status):percent(h.value)}</strong><small>${esc(h.status)}</small>${h.partial===null||h.partial===undefined?'':`<small>Partial donor-pattern: ${percent(h.partial)}</small>`}</div><div><small>Intended-base signal</small><strong>${target}</strong></div></div><details><summary>HDR estimate details</summary><p>${esc(h.reason)} Estimates are fitted signal contributions, not confirmed allele or cell frequencies. Do not add HDR, target signal and indels.</p></details>`;}
+export function desiredOutcome(row,engine){
+ const targets=targetsOf(row),snp=row.workflow?row.workflow==='snp':targets.length>0;
+ const r=engine==='aq'?row.aq:row.te,rows=engine==='aq'?r?.contributions:r?.outcomes;
+ const label=snp?'Intended edit · best fit':'Out-of-frame · proxy';
+ const unavailable=reason=>({value:null,label,status:'Unresolved',reason});
+ if(!Array.isArray(rows)||r?.error)return unavailable('Engine outcome data unavailable.');
+ if(snp&&!targets.length)return unavailable('Select all required intended changes first.');
+ const key=v=>`${v.ref}${v.position}${v.alt}`;
+ if(snp&&targets.some(t=>engine==='aq'?!r.markers?.some(m=>key(m)===key(t)&&m.covered&&m.inFit):!r.variants?.some(m=>key(m)===key(t)&&Number.isFinite(m.sample_alt_signal))))return unavailable('An intended site is outside the available evidence.');
+ let value=0;
+ for(const o of rows){if(!Number.isFinite(o.fraction)||o.fraction<0)return unavailable('Invalid model weights.');const size=engine==='aq'?o.size:o.net_bp;if(!Number.isFinite(size))return unavailable('Outcome length change missing.');
+ if(!snp){if(size%3!==0)value+=o.fraction;continue;}
+ if(size!==0)continue;
+ if(engine==='aq'){
+ if(!['edit','edit_partial'].includes(o.kind))continue;
+ if(!Array.isArray(o.carries))return unavailable('Substitution outcome lacks mapped bases.');
+ if(targets.every(t=>o.carries.includes(t.position-1)))value+=o.fraction;
+ }else{
+ if(o.kind!=='substitution')continue;
+ const carried=String(o.label).split('+');if(!carried.every(k=>r.variants.some(v=>key(v)===k)))return unavailable('Unrecognized substitution outcome.');
+ if(targets.every(t=>carried.includes(key(t))))value+=o.fraction;
+ }}
+ if(value>1.001)return unavailable('Invalid model total.');
+ const fit=engine==='aq'?r.r2:r.metrics?.r_squared;
+ const weak=!Number.isFinite(fit)||fit<.85;
+ return {value,label,status:weak?'Weak fit · review':'Provisional estimate',reason:(snp?'Fitted substitution-only outcomes carrying ALL selected intended changes; blocking changes optional. This excludes modeled indels. Multisite co-occurrence remains a model assumption.':'Fitted net length changes not divisible by three. Coding context is not verified: this is a frameshift proxy, not a functional knockout score. In-frame disruptive edits are not included.')+(weak?' Fit quality is below the review threshold.':'')+' Not a guaranteed positive-clone recovery rate.',method:'desired-outcome/1'};
+}
+export function goalCard(row,engine){const g=desiredOutcome(row,engine);return `<div class="goal-card"><small>${esc(g.label)}</small><strong>${g.value===null?'Unresolved':percent(g.value)}</strong><span>${esc(g.status)}</span><details><summary>What this estimate counts</summary><p>${esc(g.reason)}</p></details></div>`;}
+export function hdrCard(row,engine){const h=estimatedHdr(row,engine),targets=targetsOf(row);const signals=targets.map(t=>engine==='aq'?row.aq?.markers?.find(v=>v.position===t.position&&v.alt===t.alt)?.raw:row.te?.variants?.find(v=>v.position===t.position&&v.alt===t.alt)?.sample_alt_signal);const valid=signals.length&&signals.every(Number.isFinite);const target=valid?(Math.min(...signals)===Math.max(...signals)?percent(signals[0]):`${percent(Math.min(...signals))}–${percent(Math.max(...signals))}`):'Not available';return `${goalCard(row,engine)}<details><summary>Donor incorporation and target-base signal</summary><div class="hdr-card"><div><small>Estimated HDR · best fit</small><strong>${h.value===null?esc(h.status):percent(h.value)}</strong><small>${esc(h.status)}</small>${h.partial===null||h.partial===undefined?'':`<small>Partial donor-pattern: ${percent(h.partial)}</small>`}</div><div><small>Intended-base signal</small><strong>${target}</strong></div></div><details><summary>HDR estimate details</summary><p>${esc(h.reason)} Estimates are fitted signal contributions, not confirmed allele or cell frequencies. Do not add HDR, target signal and indels.</p></details></details>`;}

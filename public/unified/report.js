@@ -1,9 +1,9 @@
-import {hdrCard,estimatedHdr} from './hdr.js';
+import {hdrCard,estimatedHdr,desiredOutcome} from './hdr.js';
 import {indelChart} from './charts.js';
 import {escapeHtml as esc,percent,variantKey,compare,csv,targetsOf} from './core.js';
 export function targetSignals(r){return {a:r.target&&r.aq?.markers?.find(v=>variantKey(v)===variantKey(r.target)),t:r.target&&r.te?.variants?.find(v=>variantKey(v)===variantKey(r.target))};}
 export function tableRows(bundle){return [['Sample','Control','Review status','Target (control-read coordinate)','AQ raw target %','TE raw target %','AQ indel %','TE indel %','AQ R2','TE R2','AQ error','TE error'],...bundle.results.map(r=>{const m=targetSignals(r);return [r.sample,r.control,compare(r).label,targetsOf(r).map(variantKey).join('; '),signalRange(r,'aq'),signalRange(r,'te'),r.aq?.summary?.indelPct??'',Number.isFinite(r.te?.metrics?.indel_fraction)?r.te.metrics.indel_fraction*100:'',r.aq?.r2??'',r.te?.metrics?.r_squared??'',r.aq?.error||'',r.te?.error||''];})];}
-export const csvReport=b=>{const rows=tableRows(b);rows[0].push('AQ estimated HDR %','AQ HDR status','TE estimated HDR %','TE HDR status');b.results.forEach((r,i)=>{const a=estimatedHdr(r,'aq'),t=estimatedHdr(r,'te');rows[i+1].push(a.value===null?'':a.value*100,a.status,t.value===null?'':t.value*100,t.status);});return csv(rows);};
+export const csvReport=b=>{const rows=tableRows(b);rows[0].push('AQ estimated HDR %','AQ HDR status','TE estimated HDR %','TE HDR status','AQ desired outcome %','TE desired outcome %','Desired outcome');b.results.forEach((r,i)=>{const a=estimatedHdr(r,'aq'),t=estimatedHdr(r,'te');rows[i+1].push(a.value===null?'':a.value*100,a.status,t.value===null?'':t.value*100,t.status,...['aq','te'].map(e=>{const g=desiredOutcome(r,e);return g.value===null?'':g.value*100;}),desiredOutcome(r,'aq').label);});return csv(rows);};
 export function traceSvg(display,selected){
  const targets=Array.isArray(selected)?selected:selected?[selected]:[];
  if(!display?.control?.x?.length || !display?.sample?.x?.length)return '';
