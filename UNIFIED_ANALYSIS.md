@@ -2,17 +2,17 @@
 
 Open https://assured-traceedit.vercel.app/unified.html. The existing TraceEdit interface remains at the root URL.
 
-1. Enter or save a project setup, or import an Assured HTML report and choose guides and a donor. HTML files stay in the browser. Saved setups contain selected design fields, not AB1 data.
+1. Enter or save a project setup, or import an Assured HTML report and choose guides and one or both donors. HTML files stay in the browser. Saved setups contain selected design fields, not AB1 data.
 2. Add AB1 files repeatedly from different folders. Byte-identical duplicates are skipped; distinct files with identical names retain unique import numbers. Assign control, sample or ignored roles, and review each sample's matching control.
-3. Review setup. For a substitution donor, both engines must map the same substitutions to each control. Select the intended SNP separately for each control and confirm the design and pairings. Review sends the control and donor to TraceEdit; the processing notice appears before the Review button.
+3. Review setup. For a substitution donor, both engines must map the same substitutions to each control. Select every intended nucleotide change separately for each control and confirm the design and pairings. Review sends the control and donor to TraceEdit; the processing notice appears before the Review button.
 4. Run both. AssuredQC runs in a browser worker; TraceEdit uses its existing same-origin server API. Each read is fitted independently, even if several reads came from one clone. A failed engine remains visible without discarding the other result.
 5. Inspect the comparison, warnings, donor-site signals, model contributions and continuous traces. Export a combined HTML report, CSV and full JSON. TraceEdit trace windows and AssuredQC figures can also be downloaded as SVG.
 
 ## Shared scope
 
-Version 1 supports one/two SpCas9 guides, knockouts/deletions, and substitution donors of 30–300 nt with up to six changes. Large inserts, other nucleases, unknown-guide inference and joint forward/reverse fitting remain in the separate apps.
+Version 1.1 supports one/two SpCas9 guides, knockouts/deletions, and one or two substitution donors of 30–300 nt each with up to six distinct changes. Large inserts, other nucleases, unknown-guide inference and joint forward/reverse fitting remain in the separate apps.
 
-Engine candidate models and defaults remain distinct. AssuredQC's adapter expands its window to include donor changes, bounded at 150 bases upstream and 250 downstream. Actual settings and fit coverage are recorded. TraceEdit retains its native window rules. Both receive identical control/sample bytes and reviewed guides/substitutions; input hashes are checked before comparison.
+Engine candidate models and defaults remain distinct. AssuredQC's adapter expands its window to include donor changes, bounded at 150 bases upstream and 250 downstream. Actual settings and fit coverage are recorded. The adapter requests 40 bases upstream and 150 downstream for AssuredQC (expanding for distant markers), and a 150-base TraceEdit window. TraceEdit retains its native window rules. Both receive identical control/sample bytes and reviewed guides/substitutions; input hashes are checked before comparison.
 
 ## Interpretation
 
@@ -30,3 +30,9 @@ No project inventory or experimental reads are included in the feature. Files an
 - Existing Python engine/API tests remain applicable; the inference engine was not modified.
 - Browser checks cover additive file selections, synthetic 55% SNP recovery by both engines, upstream-window inclusion, JSON/HTML exports and mobile layout.
 - Real CDON knockout and NALCN V316M control/sample pairs were checked locally. No experimental data were sent to the hosted deployment for these tests.
+
+## Pool reports
+
+Two manual donors are separated with a blank line; wrapped lines within a donor remain accepted. Each donor retains its own marker membership. Conflicting alternate alleles at one position are rejected. Multiple intended bases are selected explicitly during review. HTML reports include a summary, per-base raw/corrected signals, all target highlights, continuous traces, fit warnings, provenance and interpretation limits. Full-donor contributions are not reported as precise-edit efficiency. No automatic ICE comparison is fabricated; external ICE results are not imported.
+
+PHF6 S199E and S199A were verified end-to-end on localhost with both guides and donors; experimental inputs are excluded from Git.

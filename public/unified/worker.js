@@ -1,3 +1,4 @@
+import {donorsOf,targetsOf} from './core.js';
 import {parseAbif} from './vendor/assured-qc/abif.js';
 import {specFromControl} from './vendor/assured-qc/manualSpec.js';
 import {analysePair} from './vendor/assured-qc/analyze.js';
@@ -8,20 +9,29 @@ self.onmessage=async ({data:m})=>{
     const control=parseAbif(m.control.buffer,m.control.name);
     if(control.calls.length<150 || control.calls.length>4000)throw Error('Control read must contain 150–4000 bases.');
     if(m.action==='prepare'){
-      const p=specFromControl({control,guides:m.setup.guides,donor:m.setup.donor,gene:m.setup.gene});
-      if(p.error)throw Error(p.error);
-      if(p.spec.donors.some(d=>d.insertBp || d.replacedBp))throw Error('This donor contains an insertion/deletion. The dual-engine workspace currently supports substitution donors only.');
-      if(p.spec.markers.length>6)throw Error('Both-engine screening supports at most six donor substitutions.');
-      if(m.setup.donor && !p.spec.markers.length)throw Error('No donor substitutions were mapped. Check the control and donor.');
+      const plans=(donorsOf(m.setup).length?donorsOf(m.setup):['']).map((donor,i)=>{
+        const p=specFromControl({control,guides:m.setup.guides,donor,gene:m.setup.gene});
+        if(p.error)throw Error(p.error);
+        if(p.spec.donors.some(d=>d.insertBp || d.replacedBp))throw Error('Only substitution donors are supported.');
+        if(donor && !p.spec.markers.length)throw Error('No donor substitutions were mapped.');
+        p.spec.donors.forEach(d=>{d.name=`Donor ${i+1}`;d.carriesMarkers=p.spec.markers.map(v=>v.pos);});
+        return p;
+      });
+      const p=structuredClone(plans[0]),markers=new Map();
+      for(const plan of plans)for(const v of plan.spec.markers){const old=markers.get(v.pos);if(old && (old.ref!==v.ref || old.alt!==v.alt))throw Error('Donors specify conflicting alternate bases at the same position. Analyze separately.');markers.set(v.pos,v);}
+      p.spec.markers=[...markers.values()].sort((a,b)=>a.pos-b.pos);
+      p.spec.donors=plans.flatMap(p=>p.spec.donors);
+      p.warnings=[...new Set(plans.flatMap(p=>p.warnings||[]))];
+      if(p.spec.markers.length>6)throw Error('Both-engine screening supports at most six distinct donor substitutions.');
       self.postMessage({ok:true,spec:p.spec,warnings:p.warnings,hash:await hash(m.control.buffer)});return;
     }
     const edited=parseAbif(m.sample.buffer,m.sample.name);
     if(edited.calls.length<150 || edited.calls.length>4000)throw Error('Sample read must contain 150–4000 bases.');
     const spec=structuredClone(m.spec);
-    spec.markers.forEach(v=>{v.role=m.target && v.pos===m.target.position-1?'intended':'blocking';v.label=v.role==='intended'?'Intended SNP':'Other donor change';});
+    spec.markers.forEach(v=>{v.role=targetsOf(m).some(t=>v.pos===t.position-1 && v.alt===t.alt)?'intended':'blocking';v.label=v.role==='intended'?'Intended SNP':'Other donor change';});
     const first=Math.min(...spec.guides.map(g=>g.cut));
     const last=Math.max(...spec.guides.map(g=>g.cut));
-    const pre=Math.max(25,...spec.markers.map(v=>first-v.pos+5));
+    const pre=Math.max(40,...spec.markers.map(v=>first-v.pos+5));
     const post=Math.max(150,...spec.markers.map(v=>v.pos-last+5));
     if(pre>150 || post>250)throw Error('Donor changes lie too far from the cut for this comparison. Review the design in the separate apps.');
     const options={preCut:pre,postCut:post,sampleType:m.setup.sampleType};
