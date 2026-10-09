@@ -131,6 +131,19 @@ def build_report(bundle,indices,out,title,height,caption,centers,labels):
                               ('LINEBELOW',(0,0),(-1,0),.6,colors.HexColor('#779d91')),
                               ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f5f7f6')])]))
     story.extend([table,Spacer(1,12)])
+    deletion_results = [r for r in results if r.get('deletion_evidence',{}).get('groups')]
+    if deletion_results:
+        story += [p('Deletion findings','Heading2'),p('These are fitted trace contributions, not confirmed allele or cell percentages. Sequence-identical proposals are combined. Positions refer to the control read, not the genome. The cut-site figure uses a constant upstream offset and does not show the deletion as a gap.')]
+        for r in deletion_results:
+            evidence = r['deletion_evidence']
+            story.append(p(short_label(r),'Heading3'))
+            story.append(p('; '.join(f"{g['size_bp']} bp deletion: {percent(g['fraction'])}" for g in evidence['size_distribution'] if g['fraction']>=.05)))
+            for g in evidence['groups']:
+                story.append(p(f"Representative deletion: bases {g['start']}-{g['end']} ({g['size_bp']} bp), {percent(g['fraction'])} contribution. {len(g['equivalent_intervals'])} breakpoint placement(s) produce the same repaired sequence."))
+                if 'expected_junction' in g:
+                    story.append(p('Expected junction: '+g['expected_junction'][:12]+' | '+g['expected_junction'][12:]))
+                    story.append(p('Observed calls: '+g['observed_calls'][:12]+' | '+g['observed_calls'][12:]))
+                    story.append(p(f"{g['matching_calls']}/{g['compared_calls']} calls match; minimum Q{g['min_quality']}. Whole-sample base calls cannot resolve mixed alleles."))
     if positions:
         story.extend([PageBreak(),p('Per-site SNP signals','Heading2'),p('Positions refer to the control read. The figure labels do not replace these coordinates. Unavailable measurements are shown as a dash.')])
         snp_rows=[[p(x,'CellTrace') for x in ['Sample']+[str(v['position'])+': '+v['ref']+'>'+v['alt'] for v in variants]]]

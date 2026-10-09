@@ -35,5 +35,6 @@ def test_invalid_upload_and_export():
 
 def test_health_and_frontend():
     client=app.test_client()
-    assert client.get('/api/health').get_json()['storage']=='stateless'
-    assert b'Assured TraceEdit' in client.get('/').data
+    assert client.get('/api/health').get_json()['storage']=='local-and-stateless'
+    page=client.get('/').data
+    assert b'ASSURED' in page and b'id="analysis-form"' in page

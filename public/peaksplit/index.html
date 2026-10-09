@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peaksplit — CRISPR edit deconvolution from Sanger traces</title>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<header class="mast">
+  <div class="wrap">
+    <h1>Peaksplit</h1>
+    <p>Splits the mixed Sanger peaks from an edited cell pool into the alleles that produced them: indels for knockouts, donor-templated changes for SNP knock-ins. Files are read in your browser and never uploaded.</p>
+  </div>
+  <canvas id="mastTrace" class="mast-trace" aria-hidden="true"></canvas>
+</header>
+<main class="wrap">
+  <section aria-labelledby="h-files">
+    <h2 id="h-files">Traces</h2>
+    <div class="row"><button class="btn" id="newProject" type="button">New project / clear workspace</button><button class="btn quiet" id="restoreProject" type="button" disabled>Restore previous project</button></div>
+    <p class="hint">New project clears reads, designs and results together. Choose files adds to the current project. Catalog imports and example data start a separate project.</p>
+    <p class="hint">For two-guide excisions such as MYD88, use <a href="/#workspace" target="_top">TraceEdit with both guides</a>. Peaksplit models one guide and deletions up to 60 bp.</p>
+    <div class="drop" id="drop">
+      <div><strong>Drop .ab1 files here</strong> — controls and edited reads together, plus an optional sample sheet (.csv).
+        <p class="hint">Sample sheet columns: label, control file, edited file, guide, donor (optional), nuclease (optional).</p></div>
+      <div class="row">
+        <button class="btn primary" id="chooseBtn" type="button">Choose files</button>
+        <label class="btn quiet" tabindex="0">Import sample sheet<input type="file" id="sheetInput" accept=".csv,.tsv,.txt" hidden></label>
+        <button class="btn quiet" id="demoBtn" type="button">Load example data</button>
+      </div>
+      <input type="file" id="fileInput" multiple accept=".ab1,.abi,.csv,.tsv,.txt" hidden>
+    </div>
+    <ul class="filelist" id="fileList"></ul>
+  </section>
+
+  <section aria-labelledby="h-samples">
+    <div class="sec-head"><h2 id="h-samples">Samples</h2>
+      <div class="row"><input type="text" class="mono" id="guideAll" placeholder="Same guide for every sample" style="width:260px" spellcheck="false"><button class="btn quiet" id="applyGuide" type="button">Apply to all</button><button class="btn" id="addSample" type="button">Add sample</button></div>
+    </div>
+    <div class="bulk">
+      <label class="f"><span>Same donor for every sample — ssODN or expected HDR sequence, either strand</span>
+        <textarea class="mono" id="donorAll" rows="2" spellcheck="false" placeholder="Paste donor sequence"></textarea></label>
+      <div class="row"><button class="btn quiet" id="applyDonor" type="button">Apply donor to all</button><button class="btn quiet" id="clearDonor" type="button">Clear donors</button></div>
+    </div>
+    <p class="hint" id="bulkMsg" role="status" aria-live="polite"></p>
+    <div id="sampleList"></div>
+    <details class="settings"><summary>Model settings</summary>
+      <div class="grid">
+        <label class="f"><span>Largest deletion (bp)</span><input type="number" data-set="maxDel" value="30" min="5" max="60"></label>
+        <label class="f"><span>Largest insertion (bp)</span><input type="number" data-set="maxIns" value="10" min="1" max="20"></label>
+        <label class="f"><span>Deletion reach upstream of cut (bp)</span><input type="number" data-set="maxLeft" value="15" min="3" max="40"></label>
+        <label class="f"><span>Inference window after cut (bp)</span><input type="number" data-set="after" value="100" min="40" max="300"></label>
+      </div>
+    </details>
+    <button class="btn primary" id="runBtn" type="button">Analyze samples</button>
+  </section>
+
+  <section id="resultsSec" aria-labelledby="h-results" hidden>
+    <div class="sec-head"><h2 id="h-results">Results</h2>
+      <div class="row"><button class="btn quiet" id="copyBtn" type="button">Copy table</button><button class="btn" id="exportBtn" type="button">Export CSV</button></div></div>
+    <div class="summary tablewrap"><table id="summary"></table></div>
+    <div id="detail" class="detail"></div>
+  </section>
+
+  <p class="foot">How it works: the edited read is aligned to the control upstream of the cut, then the per-position base signal after the cut is fitted (non-negative least squares) as a mix of wild type, every deletion and insertion near the cut, and the donor-derived allele, using the control's own peak shapes as the template. Knockout score is the share of frameshift or ≥ 21 bp indels; knock-in score is the share of the donor allele. Treat results with R² below 0.8 with caution and confirm critical clones by NGS.</p>
+</main>
+<script src="src/core.js"></script>
+<script src="src/ui.js"></script>
+</body>
+</html>

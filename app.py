@@ -1,4 +1,4 @@
-"""Stateless cloud API. Uploaded traces exist only for the duration of a request."""
+"""Local-first Sanger analysis app with request-scoped trace processing."""
 import io
 import json
 import os
@@ -18,6 +18,12 @@ from chromatograms import trace_window, COLORS
 HERE=Path(__file__).parent
 app=Flask(__name__,static_folder='public',static_url_path='')
 app.config['MAX_CONTENT_LENGTH']=4_000_000
+HOSTED = bool(os.environ.get('VERCEL'))
+if not HOSTED:
+    from catalog_api import catalog_api
+    app.register_blueprint(catalog_api)
+    from batch_api import batch_api
+    app.register_blueprint(batch_api)
 
 @app.before_request
 def request_limit():
@@ -39,8 +45,14 @@ def oversized(error): return jsonify(error='Request too large. Use files or a fi
 @app.get('/')
 def index(): return send_from_directory(HERE/'public','index.html')
 
+@app.get('/peaksplit/')
+def peaksplit_index(): return send_from_directory(HERE/'public'/'peaksplit','index.html')
+
+@app.get('/peaksplit/<path:filename>')
+def peaksplit_assets(filename): return send_from_directory(HERE/'public'/'peaksplit',filename)
+
 @app.get('/api/health')
-def health(): return jsonify(status='ok',version='0.3.0',storage='stateless')
+def health(): return jsonify(status='ok',version='0.7.0',storage='hosted-stateless' if HOSTED else 'local-and-stateless')
 
 def uploaded(role):
     file=request.files.get(role)

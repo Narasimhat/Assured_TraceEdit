@@ -13,3 +13,17 @@ uploads/
 output/
 tmp/
 node_modules/
+
+# Keep the integrated app's cloned upstream source out of the root project history
+public/peaksplit/node_modules/
+public/peaksplit/.git/
+
+# Local experimental inventory and workbook exports
+public/catalog/
+public/corpus/
+public/reports/
+public/lageso_projects.json
+data/
+*sample_sheet.csv
+public/*sample_sheet.csv
+scripts/myd88_report.py

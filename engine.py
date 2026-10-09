@@ -268,7 +268,7 @@ def analyze(control, sample, guides=None, cut_positions=None, variants=None, max
                      'background_corrected_signal':float(np.clip((raw-background)/max(1e-8,1-background),0,1))})
     if snps and indel>.1: warnings.append('Substantial indel signal confounds per-position SNP fractions; SNP signal is not an allele frequency.')
     if len(snps)>1: warnings.append('Sanger mixtures cannot phase separated SNPs. Substitution-combination contributions are non-unique and do not establish complete donor incorporation.')
-    return {'version':VERSION,'sample':sample.name,'control':control.name,
+    result = {'version':VERSION,'sample':sample.name,'control':control.name,
             'source_hashes':{'control':control.sha256,'sample':sample.sha256},
             'status':'review_required' if warnings else 'fit_pass','warnings':warnings,
             'metrics':{'indel_fraction':indel,'frameshift_proxy':frameshift,'substitution_fraction':substitutions,
@@ -285,3 +285,6 @@ def analyze(control, sample, guides=None, cut_positions=None, variants=None, max
                 'Frameshift proxy assumes a coding-region edit; it is not proof of knockout.',
                 'Sanger base-position sampling and a constant upstream offset may misalign complex mixtures.',
                 'No compound SNP+indel alleles, large insertions, arbitrary complex repair, or mosaic copy-number inference.']}
+    from deletion_evidence import explain_deletions
+    result['deletion_evidence'] = explain_deletions(control, oriented, result)
+    return result
