@@ -40,3 +40,7 @@ PHF6 S199E and S199A were verified end-to-end on localhost with both guides and 
 ## Import and individual reports (1.2)
 
 Selecting an HTML design fills project and inferred gene metadata immediately when no reads are loaded. Applying the selected design fills the reviewed guide/donor choices. Gene and sequencing primer are optional labels; PCR primer sequences are not assumed to identify the actual sequencing primer. Explicit matching control/sample review remains required. Each result shows native engine contributions automatically and offers separate AssuredQC and TraceEdit HTML reports, both per read and for all completed reads. These exports contain each engine’s own output from the shared reviewed settings; they are not standalone-default reruns.
+
+## HTML mutation annotations
+
+The unified importer reads a unique `Codon: REF -> ALT` annotation and synonymous `p.X123X: REF -> ALT` codon changes within the selected design section. It maps both orientations against the WT and requires all differing bases to match donor substitutions. Only unique, non-conflicting intended mappings are preselected. Silent matches are labeled in review. Missing, ambiguous or unsupported annotations fall back to manual selection; Select all is never automatic. Stored setup provenance retains the parsed annotations.
