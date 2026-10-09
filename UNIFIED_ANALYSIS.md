@@ -44,3 +44,7 @@ Selecting an HTML design fills project and inferred gene metadata immediately wh
 ## HTML mutation annotations
 
 The unified importer reads a unique `Codon: REF -> ALT` annotation and synonymous `p.X123X: REF -> ALT` codon changes within the selected design section. It maps both orientations against the WT and requires all differing bases to match donor substitutions. Only unique, non-conflicting intended mappings are preselected. Silent matches are labeled in review. Missing, ambiguous or unsupported annotations fall back to manual selection; Select all is never automatic. Stored setup provenance retains the parsed annotations.
+
+## Estimated HDR
+
+The UI, combined HTML, AssuredQC HTML, CSV and JSON distinguish complete-donor model contributions from intended-base signal. AssuredQC uses its native intendedEditPct (complete donor without indels), requiring covered donor sites and R² >= 0.85. TraceEdit provides a number only for a single mapped donor substitution using substitution_fraction. Distinct donor signatures and weak fits are unresolved, not zero. No summed donor-specific percentages or phase claims are made. Existing sessions without recorded donor variants require a fresh run. The native TraceEdit PDF retains its standalone output.
