@@ -2,3 +2,7 @@
 
 .page-intro .eyebrow{display:none}.page-intro h1{font-size:32px}.page-intro p:not(.eyebrow){margin:8px 0 12px}.steps{margin:14px 0 10px}#analysis-shell>details{margin:6px 0 12px}.step-card{padding:24px 28px}.step-card details{padding:8px 0}#guides{min-height:64px}.step-help{margin-bottom:18px}
 #workspace{scroll-margin-top:100vh}
+
+.clone-review{padding:20px;margin:20px 0;background:#eef6f2;border:1px solid #bad3c5;border-radius:12px}.clone-review h3{margin-top:0}.clone-review>p{max-width:95ch;color:#49635a}.clone-choice{padding:16px;margin:12px 0;background:white;border-left:4px solid #b68b35;border-radius:6px;overflow-wrap:anywhere}.clone-choice.prioritize{border-left-color:#247c62}.clone-choice.repeat{border-left-color:#ab5447}.clone-choice h4{margin:8px 0}.clone-choice li{margin:5px 0}.clone-choice button{margin-top:10px}
+
+.clone-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,285px),1fr));gap:12px}.clone-choices .clone-choice{margin:0 0 12px;font-size:14px}
