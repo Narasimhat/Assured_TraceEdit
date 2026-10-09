@@ -2,7 +2,7 @@
 
 Open https://assured-traceedit.vercel.app/unified.html. The existing TraceEdit interface remains at the root URL.
 
-1. Enter or save a project setup, import an Assured HTML report, or choose a LAGESO XLSX workbook. The workbook importer recognizes the Project3 documentation headers, preserves original row references, and lets you choose guides and a donor. HTML and workbook files stay in the browser. Saved setups contain selected design fields, not workbook contents or AB1 data.
+1. Enter or save a project setup, or import an Assured HTML report and choose guides and a donor. HTML files stay in the browser. Saved setups contain selected design fields, not AB1 data.
 2. Add AB1 files repeatedly from different folders. Byte-identical duplicates are skipped; distinct files with identical names retain unique import numbers. Assign control, sample or ignored roles, and review each sample's matching control.
 3. Review setup. For a substitution donor, both engines must map the same substitutions to each control. Select the intended SNP separately for each control and confirm the design and pairings. Review sends the control and donor to TraceEdit; the processing notice appears before the Review button.
 4. Run both. AssuredQC runs in a browser worker; TraceEdit uses its existing same-origin server API. Each read is fitted independently, even if several reads came from one clone. A failed engine remains visible without discarding the other result.
@@ -20,13 +20,13 @@ No averaged score or confirmed genotype is produced. Review flags include raw ta
 
 ## Reproducibility and privacy
 
-`public/unified/vendor/assured-qc/provenance.json` pins the upstream source commit and per-file hashes. Copied AssuredQC engine modules are unmodified. TraceEdit health metadata includes the engine-file SHA-256; exported JSON records both engine identities. ExcelJS 4.4.0 is bundled with its MIT license for local workbook reading. Workbook formulae are not evaluated; cached values are used.
+`public/unified/vendor/assured-qc/provenance.json` pins the upstream source commit and per-file hashes. Copied AssuredQC engine modules are unmodified. TraceEdit health metadata includes the engine-file SHA-256; exported JSON records both engine identities.
 
-No experimental workbook, project inventory or reads are included in the feature. Files and results stay in this tab until exported; TraceEdit processing transmits selected AB1 bytes to the server. Saved setups use browser local storage and are origin-specific. Changing files/setup invalidates review and labels old results as a previous run. Loading a different project clears reads after confirmation. Download results before closing the tab.
+No project inventory or experimental reads are included in the feature. Files and results stay in this tab until exported; TraceEdit processing transmits selected AB1 bytes to the server. Saved setups use browser local storage and are origin-specific. Changing files/setup invalidates review and labels old results as a previous run. Loading a different project clears reads after confirmation. Download results before closing the tab.
 
 ## Verification
 
 - `node --test tests/*.test.cjs` includes importer, review, comparison, CSV-injection and report-escaping checks.
 - Existing Python engine/API tests remain applicable; the inference engine was not modified.
-- Browser checks cover real LAGESO workbook parsing without API requests, additive file selections, synthetic 55% SNP recovery by both engines, upstream-window inclusion, JSON/HTML exports and mobile layout.
+- Browser checks cover additive file selections, synthetic 55% SNP recovery by both engines, upstream-window inclusion, JSON/HTML exports and mobile layout.
 - Real CDON knockout and NALCN V316M control/sample pairs were checked locally. No experimental data were sent to the hosted deployment for these tests.
