@@ -51,3 +51,14 @@ export function engineReportHtml(bundle,engine){
  }).join('');
  return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name} analysis report</title><style>body{font:16px/1.6 system-ui;max-width:1100px;margin:32px auto;padding:20px;color:#173d30}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ccc;padding:8px;text-align:left}svg{width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}section{margin-top:30px}</style><h1>${name} · ${esc(bundle.setup.name)}</h1><p>${esc(bundle.created)} · ${esc(bundle.setup.sampleType)} · Gene ${esc(bundle.setup.gene||'unspecified')} · Sequencing primer ${esc(bundle.setup.primer||'unspecified')}</p><p>This report contains only ${name}'s independently calculated output from the shared, reviewed experiment setup. It is not an averaged result or a rerun using the standalone application's defaults. Version: ${esc(JSON.stringify(engine==='aq'?bundle.engines.assuredQC:bundle.engines.traceEdit))}.</p><p>Per-base signals and fitted model contributions are not confirmed allele or cell frequencies. Multiple substitutions cannot be phased from bulk Sanger alone; indels can confound substitution signals. Full-donor contributions are not the precise-edit frequency.</p>${sections}<h2>Reviewed experiment</h2><pre>${esc(JSON.stringify(bundle.setup,null,2))}</pre></html>`;
 }
+
+export function nativeTraceEditRequest(bundle){
+ const results=bundle.results.map(r=>{const t=structuredClone(r.te||{});delete t.plot;if(!t.metrics)return {sample:r.sample,status:'failed',error:t.error||'TraceEdit analysis failed'};
+ const targets=targetsOf(r);if(targets.length>1){t.target_variant=null;t.warnings=[...(t.warnings||[]),`Intended changes: ${targets.map(variantKey).join(', ')}. Multiple intended bases; no phase assignment.`];}
+ return t;});
+ const first=results.findIndex(r=>r.metrics&&Object.keys(r.displays||{}).length);if(first<0)throw Error('No usable TraceEdit chromatograms are available for a visual report.');
+ const centers=Object.keys(results[first].displays).map(Number),hash=results[first].source_hashes.control;
+ const indices=results.map((r,i)=>r.metrics&&r.source_hashes?.control===hash&&centers.every(c=>r.displays?.[c])?i:-1).filter(i=>i>=0).slice(0,12);
+ results.forEach((r,i)=>{if(!indices.includes(i))delete r.displays;});
+ return {bundle:{id:`unified-${bundle.created}`,created_utc:bundle.created,settings:{...bundle.setup,flank:18},results},indices,centers,title:('TraceEdit · '+bundle.setup.name).slice(0,75),flank:18,format:'report'};
+}
