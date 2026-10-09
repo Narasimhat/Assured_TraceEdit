@@ -3,9 +3,11 @@ import os,json,re,hashlib,zipfile,collections,time
 import argparse
 parser=argparse.ArgumentParser(description='Index a local project directory')
 parser.add_argument('root',type=Path)
-ROOT=parser.parse_args().root.resolve()
+ROOT=parser.parse_args().root.absolute()
 DISPLAY_ROOT=ROOT
-ROOT=Path('\\\\?\\'+str(ROOT)) if os.name=='nt' else ROOT
+if os.name=='nt':
+ raw=str(ROOT)
+ ROOT=Path('\\\\?\\UNC\\'+raw[2:] if raw.startswith('\\\\') else '\\\\?\\'+raw)
 APP=Path(__file__).resolve().parents[1]
 OUT=APP/'public'/'catalog';OUT.mkdir(parents=True,exist_ok=True)
 SEQ={'.ab1','.abi','.scf','.seq','.fasta','.fa','.fastq','.fq','.bam','.sam','.vcf'}
@@ -37,6 +39,8 @@ for base,dirs,files in os.walk(ROOT,onerror=lambda e:issue(e.filename,e),followl
       if item['category']=='Archive':item['coverage_note']='Nested archive indexed as a file; contents not expanded in this catalog.'
    except (OSError,zipfile.BadZipFile,RuntimeError) as e:issue(p,e)
   if n%1000==0:print(f'{n} source files; {members} archive members; {len(projects)} projects; {round(time.time()-started)} seconds',flush=True)
+if not projects and errors:
+ raise RuntimeError('Inventory failed before finding projects; existing catalog summary retained: '+str(errors[0]))
 summary=[]
 for key,group in projects.items():
  (OUT/(key+'.json')).write_text(json.dumps(group,ensure_ascii=False),encoding='utf-8')

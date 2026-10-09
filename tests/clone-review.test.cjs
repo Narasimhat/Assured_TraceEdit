@@ -1,7 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const {JSDOM}=require('jsdom');
-const {review}=require('../public/clone-review.js');
-function sample(){return {sample:'clone.ab1',status:'fit_pass',metrics:{r_squared:.99,indel_fraction:.01},alignment:{baseline_mae:.01,sample_q20_fraction:.99},inference:{control_q20_fraction:.99},warnings:[],variants:[{position:201,ref:'A',alt:'C',background_corrected_signal:.99}],target_variant:{position:201,ref:'A',alt:'C',label:'E280D'},displays:{201:{center:201,control:{positions:[201],quality:[40]},sample:{positions:[201],quality:[40]}}}};}
+const {review:rawReview}=require('../public/clone-review.js');
+const context={reviewed:true,control_sha256:'control',sample_sha256:['sample']};
+const review=(r,s={})=>rawReview(r,{project_context:context,...s});
+function sample(){return {source_hashes:{control:'control',sample:'sample'},sample:'clone.ab1',status:'fit_pass',metrics:{r_squared:.99,indel_fraction:.01},alignment:{baseline_mae:.01,sample_q20_fraction:.99},inference:{control_q20_fraction:.99},warnings:[],variants:[{position:201,ref:'A',alt:'C',background_corrected_signal:.99}],target_variant:{position:201,ref:'A',alt:'C',label:'E280D'},displays:{201:{center:201,control:{positions:[201],quality:[40]},sample:{positions:[201],quality:[40]}}}};}
 test('target evidence can prioritize; missing target, low quality, mixed signal or confounding indels cannot',()=>{
  let r=sample();assert.equal(review(r).tier,'prioritize');
  delete r.target_variant;assert.equal(review(r).tier,'review');
@@ -30,4 +32,11 @@ test('select all skips failed rows, clears in one click and resets between sessi
  d.getElementById('clear-selection').click();assert.equal(d.querySelectorAll('[data-row]:checked').length,0);
  d.getElementById('select-all').click();w.testRender({...b,id:'two'});assert.equal(d.querySelectorAll('[data-row]:checked').length,0);
  dom.window.close();
+});
+
+test('unconfirmed or mismatched source assignments cannot prioritize an otherwise strong clone',()=>{
+ const r=sample();assert.equal(rawReview(r).tier,'review');
+ assert.equal(review(r,{project_context:{...context,reviewed:false}}).tier,'review');
+ assert.equal(review(r,{project_context:{...context,control_sha256:'other'}}).tier,'review');
+ assert.equal(review(r,{project_context:{...context,sample_sha256:['other']}}).tier,'review');
 });

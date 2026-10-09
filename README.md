@@ -10,6 +10,14 @@ The main workspace guides users through **Edit → Reads → Results**. Optional
 
 Deletion review groups sequence-identical proposals, shows missing segments and predicted junctions, and retains breakpoint ambiguity. Peaksplit offers a reversible project reset and requires explicit control pairing.
 
+## Saved project setup and review
+
+In Edit, expand **Project setup · save or reuse** to save the gene, cell line, primer, edit goal and current design fields. Setups remain in this browser's local storage; raw AB1 files are not saved. Re-select reads for each batch. Clearing site data removes saved setups; export analysis JSON to retain the run's review record.
+
+The Reads step lists missing metadata and asks for experimental-record confirmation of the design and sample/control pairing. Analysis may proceed provisionally, but clone prioritization requires a reviewed setup bound to the exact control and sample SHA-256 hashes. These declarations are not independent biological validation. Earlier/imported runs without this evidence remain under review.
+
+Changing controls clears read coordinates. Loading a saved setup restores coordinates only after the identical control bytes are verified. New sample selections require pairing review again. The setup UI does not automatically resolve the historical corpus audit, predict unknown metadata, or confirm biological outcomes.
+
 ## Run locally
 
 Python 3.11 or newer:

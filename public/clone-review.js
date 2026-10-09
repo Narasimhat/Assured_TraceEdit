@@ -40,6 +40,13 @@
       if(!dominant)reason('Multiple or weak deletion models make clone interpretation uncertain.');
       if(dominant&&junction&&!poor&&!boundary&&g.size_bp%3!==0){result.tier='prioritize';result.title='Prioritize for confirmation';}
     }
+    const context=settings.project_context;
+    const verified=context?.reviewed===true&&context.control_sha256===r.source_hashes?.control&&context.sample_sha256?.includes(r.source_hashes?.sample);
+    if(!verified){
+      result.tier='review';result.title='Review setup before choosing';
+      reason('Sample/control and design assignments are unconfirmed for this result. Confirm setup, then reanalyse; changing the current form does not validate an earlier run.');
+      for(const item of context?.missing||[])reason(item);
+    }else reason('Project, design and pairing were declared reviewed for these exact source files; independent confirmation is still pending.');
     if(settings.mode==='bulk'){result.tier='review';result.title='Bulk sample — review evidence';reason('Bulk analysis cannot identify an individual clone to choose.');}
     return result;
   }
@@ -47,6 +54,7 @@
     host.replaceChildren();
     const el=(tag,text)=>{const e=document.createElement(tag);e.textContent=text;return e;};
     const entries=bundle.results.map((r,i)=>({r,i,...review(r,bundle.settings)}));
+    if(bundle.settings?.project_context?.project_name)host.append(el('p','Analysis project: '+bundle.settings.project_context.project_name+' · '+bundle.settings.project_context.gene));
     const strong=entries.filter(x=>x.tier==='prioritize');
     host.append(el('h3','Which clones should I follow up?'),el('p',`${strong.length} to prioritize for confirmation · ${entries.filter(x=>x.tier==='review').length} need review · ${entries.filter(x=>x.tier==='repeat').length} have no reliable call`),el('p','Provisional screening suggestions, not validated clone rankings. High signal does not establish homozygosity, complete donor incorporation or functional knockout. Clone choices depend on your desired genotype.'));
     const sorted=[...strong,...entries.filter(x=>x.tier!=='prioritize')];
