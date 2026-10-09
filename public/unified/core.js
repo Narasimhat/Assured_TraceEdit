@@ -1,11 +1,11 @@
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 export const dna = value => String(value || '').replace(/\s+/g, '').toUpperCase();
 export const variantKey = v => `${v.ref}${v.position}${v.alt}`;
 export const percent = v => Number.isFinite(v) ? `${(v * 100).toFixed(1)}%` : '—';
 export const donorsOf = s => s.donors || (s.donor ? [s.donor] : []);
 export const targetsOf = r => r.targets || (r.target ? [r.target] : []);
 export function validateSetup(s) {
-  if (!s.name.trim() || !s.gene.trim() || !s.primer.trim()) throw Error('Enter a project name, gene and sequencing primer.');
+  if (!s.name.trim()) throw Error('Enter a project name or import an HTML design.');
   if (!s.guides.length || s.guides.length > 2 || s.guides.some(g => !/^[ACGT]{20}$/.test(g))) throw Error('Enter one or two 20-base SpCas9 guides without PAM.');
   if (donorsOf(s).length>2 || donorsOf(s).some(d=> !/^[ACGT]{30,300}$/.test(d))) throw Error('Use a substitution donor of 30–300 A/C/G/T bases. Larger inserts require the separate apps.');
   if (s.workflow === 'snp' && !donorsOf(s).length) throw Error('Add the substitution donor for SNP screening.');

@@ -36,3 +36,7 @@ No project inventory or experimental reads are included in the feature. Files an
 Two manual donors are separated with a blank line; wrapped lines within a donor remain accepted. Each donor retains its own marker membership. Conflicting alternate alleles at one position are rejected. Multiple intended bases are selected explicitly during review. HTML reports include a summary, per-base raw/corrected signals, all target highlights, continuous traces, fit warnings, provenance and interpretation limits. Full-donor contributions are not reported as precise-edit efficiency. No automatic ICE comparison is fabricated; external ICE results are not imported.
 
 PHF6 S199E and S199A were verified end-to-end on localhost with both guides and donors; experimental inputs are excluded from Git.
+
+## Import and individual reports (1.2)
+
+Selecting an HTML design fills project and inferred gene metadata immediately when no reads are loaded. Applying the selected design fills the reviewed guide/donor choices. Gene and sequencing primer are optional labels; PCR primer sequences are not assumed to identify the actual sequencing primer. Explicit matching control/sample review remains required. Each result shows native engine contributions automatically and offers separate AssuredQC and TraceEdit HTML reports, both per read and for all completed reads. These exports contain each engine’s own output from the shared reviewed settings; they are not standalone-default reruns.
