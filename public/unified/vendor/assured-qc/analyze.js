@@ -7,6 +7,7 @@ import { confidenceFrom } from "./reliability.js";
 import { callGenotype } from "./genotype.js";
 import { shiftAt } from "./offset.js";
 import { scanUnplanned, describeUnplanned } from "./unplanned.js";
+import { assessFunction, assessAllele } from "./coding.js";
 
 const KO_MIN_SIZE = 21;
 export const isKnockoutSize = (size) => size % 3 !== 0 || Math.abs(size) >= KO_MIN_SIZE;
@@ -77,11 +78,43 @@ export function readMarkers(prepared) {
 // Pre-cut discordance seen on the ICE example traces was 0.03-0.17 (fractions agreed with ICE); synthetic traces with
 // noise at 40% of the peak height reached 0.30 and then misread the mixture. Provisional, to be refined on laboratory traces.
 export const NOISY_DISCORDANCE = 0.25;
+export const NEAR_CUT_BASES = 40;
+// The stretch of the read where the control must match the edited trace for the result to be trusted: NEAR_CUT_BASES before the first cut, or further
+// upstream when a marker (a base the donor changes) is read there.
+function relevantStart(prepared, markerRows) {
+  const markerIdx = (markerRows || []).filter((m) => m.covered && Number.isInteger(m.readIndex)).map((m) => m.readIndex);
+  const from = Math.min(prepared.firstCut - NEAR_CUT_BASES, ...(markerIdx.length ? [Math.min(...markerIdx) - 10] : []));
+  return Math.max(prepared.alignmentWindow.start, from);
+}
+
+
+/**
+ * Whether the control and edited traces differ before the cut enough to warn. A knockout or deletion is read from the cut and what lies after it, so only the stretch next
+ * to the cut counts: a base-calling shift or a primer-site difference early in the read (where the cut region still matches) is not a reason to distrust it. A design that reads donor
+ * markers keeps the whole alignment window, because the bases it reads can sit anywhere in it. On 160 laboratory clones (docs/discordance-warning.md) the whole-window rule did not
+ * predict knockout error (AUC 0.49) and fired on 57% of knockout clones, but it did flag all three donor-base overcalls of the SNP sets.
+ */
+export function discordanceWarns(quality, hasMarkers) {
+  const near = quality.discordanceNearCut;
+  if (!hasMarkers && Number.isFinite(near)) return near > NOISY_DISCORDANCE;
+  return quality.discordanceBefore > NOISY_DISCORDANCE || (Number.isFinite(near) && near > NOISY_DISCORDANCE);
+}
 
 export function unexplainedBaselineFor(decomposition, background, options = {}) {
   const goodFit = decomposition.r2 !== null && decomposition.r2 >= (options.adaptiveMinR2 ?? 0.9);
   return options.adaptiveBaseline !== false && goodFit ? Math.max(UNEXPLAINED_BASELINE, Math.min(0.4, background + 0.03)) : UNEXPLAINED_BASELINE;
 }
+
+
+// Functional knockout assessment (coding context supplied): each reported allele is spliced into the coding sequence and translated (src/coding.js).
+function functionalFor(coding, decomposition, summary) {
+  if (!coding) return null;
+  const fn = assessFunction(coding, decomposition.contributions.map((c) => ({ id: c.id, kind: c.kind, label: c.label, size: c.size, fraction: c.fraction, sequence: c.sequence })));
+  const explained = 1 - (summary.unexplainedPct || 0) / 100;
+  summary.functionalKoPct = pct(explained * fn.score.lof); summary.functionalUncertainPct = pct(explained * fn.score.uncertain);
+  return fn;
+}
+const lofOfFor = (coding) => (coding ? (allele) => allele.sequence !== undefined && assessAllele(coding, allele.sequence).lof === true : undefined);
 
 export function analysePair({ control, edited, spec, options = {} }) {
   const prepared = prepareSample({ control, edited, spec, options });
@@ -94,7 +127,8 @@ export function analysePair({ control, edited, spec, options = {} }) {
   const background = upstreamBackground(prepared);
   const baseline = unexplainedBaselineFor(decomposition, background, options);
   const summary = summarise(decomposition, baseline);
-  const intervals = options.intervals === false ? null : computeIntervals(decomposition, summary, { noiseFloor: upstreamNoise(prepared), ...(options.interval || {}) });
+  const functional = functionalFor(options.coding, decomposition, summary);
+  const intervals = options.intervals === false ? null : computeIntervals(decomposition, summary, { noiseFloor: upstreamNoise(prepared), lofOf: lofOfFor(options.coding), ...(options.interval || {}) });
   // a base change the design did not ask for (needs the fit's internals, so it is read before they are dropped)
   const unplanned = scanUnplanned(prepared, decomposition.internals, decomposition, options.unplannedScan || {});
   delete decomposition.internals; // large matrices; not part of a result
@@ -104,12 +138,13 @@ export function analysePair({ control, edited, spec, options = {} }) {
   if (Math.abs(decomposition.rawSum - 1) > 0.15) warnings.push(`The fitted abundances sum to ${decomposition.rawSum.toFixed(2)} rather than 1, which indicates a poor fit.`);
   if (summary.unexplainedPct >= 15) warnings.push(`${summary.unexplainedPct}% of the signal after the cut is not explained by any allele in the library (a complex mixture, large deletions or noise). It is counted as not wild type; the wild-type share is reliable, but the split among the edited alleles, the KO score and the intended-edit share cover only the explained part.`);
   const noiseUp = upstreamNoise(prepared);
-  const quality = { upstreamRms: Math.sqrt(noiseUp), upstreamBackground: background, unexplainedBaseline: baseline, discordanceBefore: meanDiscordance(prepared, prepared.alignmentWindow.start, prepared.alignmentWindow.end), discordanceAfter: meanDiscordance(prepared, prepared.lastCut, prepared.window.end) };
-  if (quality.discordanceBefore > NOISY_DISCORDANCE) warnings.push(`The control and edited traces already differ before the cut (mean discordance ${quality.discordanceBefore.toFixed(2)}): one of them is noisy or comes from a different template. Treat the fractions as unreliable and consider re-sequencing.`);
+  const quality = { upstreamRms: Math.sqrt(noiseUp), upstreamBackground: background, unexplainedBaseline: baseline, discordanceBefore: meanDiscordance(prepared, prepared.alignmentWindow.start, prepared.alignmentWindow.end), discordanceNearCut: meanDiscordance(prepared, relevantStart(prepared, readMarkers(prepared)), prepared.firstCut), discordanceAfter: meanDiscordance(prepared, prepared.lastCut, prepared.window.end) };
+  const hasMarkers = (prepared.spec.markers || []).length > 0;
+  if (discordanceWarns(quality, hasMarkers)) warnings.push(`The control and edited traces already differ before the cut (mean discordance ${quality.discordanceBefore.toFixed(2)}${quality.discordanceNearCut !== undefined ? `, ${quality.discordanceNearCut.toFixed(2)} in the stretch next to the cut` : ""}): one of them is noisy or comes from a different template. Treat the fractions as unreliable and consider re-sequencing.`);
   const markerReadout = readMarkers(prepared);
   const genotype = options.sampleType === "clone" ? callGenotype(decomposition, options.genotype || {}) : null;
   return {
-    ok: true, warnings, prepared, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (prepared.spec.donors || []).length > 0), markerReadout, genotype,
+    ok: true, warnings, prepared, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (prepared.spec.donors || []).length > 0), markerReadout, genotype, functional,
     quality, unplanned,
   };
 }
@@ -132,8 +167,9 @@ export function analyseReads({ reads, spec, options = {} }) {
   const decomposition = decomposeAdaptive({ prepared: list, alleles, options: { ...options, returnInternals: true } });
   const background = list.reduce((s, p) => s + upstreamBackground(p), 0) / list.length;
   const summary = summarise(decomposition, unexplainedBaselineFor(decomposition, background, options));
+  const functional = functionalFor(options.coding, decomposition, summary);
   const noise = list.reduce((s, p) => s + upstreamNoise(p), 0) / list.length;
-  const intervals = options.intervals === false ? null : computeIntervals(decomposition, summary, { noiseFloor: noise, ...(options.interval || {}) });
+  const intervals = options.intervals === false ? null : computeIntervals(decomposition, summary, { noiseFloor: noise, lofOf: lofOfFor(options.coding), ...(options.interval || {}) });
   delete decomposition.internals;
   if (decomposition.r2 !== null && decomposition.r2 < 0.8) warnings.push(`The fit explains only ${(decomposition.r2 * 100).toFixed(0)}% of the difference from the wild type; the mixture may contain alleles outside the expected library or the traces may be noisy.`);
   if (summary.unexplainedPct >= 15) warnings.push(`${summary.unexplainedPct}% of the signal after the cut is not explained by any allele in the library. It is counted as not wild type.`);
@@ -143,5 +179,5 @@ export function analyseReads({ reads, spec, options = {} }) {
   if (agreement && !agreement.agree) warnings.push(`The reads disagree about the edited share (${perRead.map((r) => `${r.name} ${r.editedPct}%`).join(", ")}). A PCR or sequencing artefact, a poor read or mixed template is more likely than biology: re-sequence from both ends.`);
   const quality = { discordanceBefore: Math.max(...list.map((p) => meanDiscordance(p, p.alignmentWindow.start, p.alignmentWindow.end))), upstreamRms: Math.sqrt(noise) };
   const genotype = options.sampleType === "clone" ? callGenotype(decomposition, options.genotype || {}) : null;
-  return { ok: true, warnings, prepared: first, preparedReads: list, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (first.spec.donors || []).length > 0), markerReadout: readMarkers(first), genotype, quality, reads: perRead, agreement, readsUsed: usable.length, readsGiven: reads.length };
+  return { ok: true, warnings, prepared: first, preparedReads: list, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (first.spec.donors || []).length > 0), markerReadout: readMarkers(first), genotype, functional, quality, reads: perRead, agreement, readsUsed: usable.length, readsGiven: reads.length };
 }

@@ -6,6 +6,7 @@ import { analyseJunctionRead, classifyBands } from "./junction.js";
 import { contributionsSvg, discordanceSvg } from "./charts.js";
 import { baseEditMarkers, baseEditTable } from "./baseEdit.js";
 import { discoverCut } from "./cutDiscovery.js";
+import { buildCodingContext, describeContext, codingBlockToGenBank } from "./coding.js";
 
 export const WORKFLOWS = {
   knockout: { label: "Knockout (indels at one cut)", needsDonor: false, method: "trace" },
@@ -17,7 +18,7 @@ export const WORKFLOWS = {
 };
 
 /** Spec from an exported design, or built from the control trace, guides and donor. */
-export function planDesign({ designSpec, control, guides, donor, gene, nuclease, baseEditor = null, editedForCut = [] }) {
+function planDesignCore({ designSpec, control, guides, donor, gene, nuclease, baseEditor = null, editedForCut = [] }) {
   if (designSpec) {
     const check = validateDesignSpec(designSpec);
     if (!check.ok) return { error: `The design file is not usable: ${check.errors[0]}${check.errors.length > 1 ? ` (and ${check.errors.length - 1} more)` : ""}`, warnings: check.warnings };
@@ -46,13 +47,47 @@ export function planDesign({ designSpec, control, guides, donor, gene, nuclease,
   return { spec: built.spec, warnings: [...notes, ...(built.warnings || [])], source: guideList.length ? "manual" : "inferred cut" };
 }
 
+const codingCache = new Map();
+/** The coding context of a design: the gene record (GenBank text) located around the design's reference window. Cached per record, reference and options. */
+export function codingFor(input, spec) {
+  if (!input || !input.genbank) return null;
+  const reference = spec.reference.sequence;
+  const key = [input.genbank.length, input.genbank.slice(0, 160), input.gene || "", input.transcript || "", JSON.stringify(input.regions || []), JSON.stringify(input.epitope || null), reference.length, reference.slice(0, 80)].join("|");
+  if (!codingCache.has(key)) codingCache.set(key, buildCodingContext(input.genbank, { reference, gene: input.gene || spec.design?.gene || "", transcript: input.transcript || "", regions: input.regions || [], epitope: input.epitope || null }));
+  return codingCache.get(key);
+}
+
+export function planDesign(input) {
+  const plan = planDesignCore(input);
+  if (plan.error) return plan;
+  // A gene record given with the traces wins; otherwise the coding block of the design file is used (knockout and deletion designs, where the functional assessment applies).
+  let genbank = input.genbank || ""; let fromDesign = false; const block = input.designSpec && input.designSpec.coding;
+  if (!genbank && block && ["knockout", "deletion"].includes(plan.spec?.design?.editKind)) {
+    const total = (block.segments || []).reduce((sum, pair) => sum + (pair[1] - pair[0]), 0);
+    if (block.sequence && total > 0 && total % 3 === 0) { genbank = codingBlockToGenBank(block); fromDesign = true; }
+  }
+  if (!genbank) return plan;
+  const o = input.codingOptions || {}; const codingInput = { genbank, gene: o.gene || "", transcript: o.transcript || "", regions: o.regions || [], epitope: o.epitope || null };
+  const got = codingFor(codingInput, plan.spec); const warnings = [...(plan.warnings || [])];
+  if (!got.ok) { warnings.push(`Functional knockout assessment is off: ${got.error}`); return { ...plan, warnings, codingInput: null, coding: null }; }
+  const m = got.context.models[0];
+  warnings.push(`Coding context${fromDesign ? " (from the design file)" : ""}: ${m.id}, ${m.protLen} residues in ${m.segs.length} coding exon${m.segs.length === 1 ? "" : "s"} (${got.context.models.length} annotated coding isoform${got.context.models.length === 1 ? "" : "s"}; the longest is used). The design's reference matches the record at ${Math.round(got.context.location.identity * 1000) / 10}%.`, ...got.context.warnings);
+  return { ...plan, warnings, codingInput, coding: describeContext(got.context), codingSource: fromDesign ? "design file" : "gene record" };
+}
+
 const round = (value, digits = 3) => (value === null || value === undefined || Number.isNaN(value) ? null : Math.round(value * 10 ** digits) / 10 ** digits);
 
+const compactFunction = (fn) => ({ call: fn.call, score: { lofPct: fn.score.lofPct, uncertainPct: fn.score.uncertainPct, notLofPct: fn.score.notLofPct }, caveats: fn.caveats, confirm: fn.confirm, context: fn.context,
+  rows: fn.rows.map((r) => ({ label: r.label, kind: r.kind, size: r.size, fraction: round(r.fraction, 4), class: r.class, lof: r.lof, summary: r.summary, details: r.details })) });
+
 export function analyseSample({ name, spec, control, edited, extraReads = [], sampleType = "pool", options = {} }) {
+  // Coding context (a gene record supplied with the design): turns the frameshift proxy into a functional knockout assessment.
+  const codingResult = codingFor(options.codingInput, spec); const coding = codingResult && codingResult.ok ? codingResult.context : null;
+  const { codingInput, ...engineOptions } = options;
   // One read: as before. Several (forward and reverse, or repeats): fitted together; each read is aligned to its own control.
   const result = extraReads.length
-    ? analyseReads({ reads: [{ name: "read 1", control, edited }, ...extraReads.map((r, i) => ({ name: r.name || `read ${i + 2}`, control: r.control, edited: r.edited }))], spec, options: { ...options, sampleType } })
-    : analysePair({ control, edited, spec, options: { ...options, sampleType } });
+    ? analyseReads({ reads: [{ name: "read 1", control, edited }, ...extraReads.map((r, i) => ({ name: r.name || `read ${i + 2}`, control: r.control, edited: r.edited }))], spec, options: { ...engineOptions, sampleType, coding } })
+    : analysePair({ control, edited, spec, options: { ...engineOptions, sampleType, coding } });
   if (!result.ok) return { name, kind: "trace-pair", ok: false, error: result.error, warnings: result.warnings || [] };
   const decomposition = result.decomposition;
   return {
@@ -60,10 +95,11 @@ export function analyseSample({ name, spec, control, edited, extraReads = [], sa
     summary: result.summary, intervals: result.intervals || null, confidence: result.confidence || null, reads: result.reads || null, agreement: result.agreement || null,
     genotype: result.genotype ? { category: result.genotype.category, call: result.genotype.call, summary: result.genotype.summary, flags: result.genotype.flags, alleles: result.genotype.alleles.map((a) => ({ label: a.label, kind: a.kind, size: a.size, fraction: round(a.fraction) })) } : null,
     contributions: decomposition.contributions.slice(0, 14).map((c) => ({ label: c.label, kind: c.kind, size: c.size, fraction: round(c.fraction, 4), indistinguishable: c.indistinguishable, alsoConsistentWith: c.alsoConsistentWith })),
+    functional: result.functional ? compactFunction(result.functional) : null,
     baseEdits: spec.baseEditor ? { editor: spec.baseEditor.editor, window: spec.baseEditor.window, target: spec.baseEditor.target, positions: baseEditTable(result.prepared, result.markerReadout, result.quality.upstreamRms, options.baseEdit || {}) } : null,
     unplanned: (result.unplanned || []).map((h) => ({ relative: h.relative, change: `${h.ref}>${h.alt}`, fraction: round(h.fraction, 3) })),
     markers: result.markerReadout.map((row) => ({ position: row.marker.pos, change: `${row.marker.ref}>${row.marker.alt}`, role: row.marker.role, label: row.marker.label || "", covered: row.covered, reason: row.reason || "", altEdited: round(row.altEdited), altControl: round(row.altControl), altNet: round(row.altNet) })),
-    quality: { upstreamRms: round(result.quality.upstreamRms, 4), upstreamBackground: round(result.quality.upstreamBackground, 4), r2: round(decomposition.r2), noiseFraction: round(decomposition.noiseFraction), rawSum: round(decomposition.rawSum), windowLength: decomposition.windowLength, positionsUsed: decomposition.positionsUsed, candidates: decomposition.candidates, columns: decomposition.columns, discordanceBefore: round(result.quality.discordanceBefore), discordanceAfter: round(result.quality.discordanceAfter), patches: result.prepared.patches.length },
+    quality: { upstreamRms: round(result.quality.upstreamRms, 4), upstreamBackground: round(result.quality.upstreamBackground, 4), r2: round(decomposition.r2), noiseFraction: round(decomposition.noiseFraction), rawSum: round(decomposition.rawSum), windowLength: decomposition.windowLength, positionsUsed: decomposition.positionsUsed, candidates: decomposition.candidates, columns: decomposition.columns, discordanceBefore: round(result.quality.discordanceBefore), discordanceNearCut: round(result.quality.discordanceNearCut), discordanceAfter: round(result.quality.discordanceAfter), patches: result.prepared.patches.length },
     charts: { contributions: contributionsSvg(decomposition.contributions), discordance: discordanceSvg(result.prepared) },
   };
 }
@@ -81,11 +117,13 @@ export function analyseJunction({ name, spec, trace, donorName }) {
 }
 
 /** One-line result for the sample table. */
+export const FUNCTIONAL_WORDS = { predicted_knockout: "predicted functional knockout", predicted_knockout_with_caveats: "predicted knockout, with caveats", not_knockout: "not a knockout", uncertain: "functional effect uncertain", unclear: "no allele above the floor" };
+
 export function headline(workflow, r) {
   if (!r.ok) return r.error;
   if (r.kind === "junction") return `${r.verdict.summary}${r.spans.fivePrimeJunction === false ? "; 5' junction not spanned" : ""}${r.spans.threePrimeJunction === false ? "; 3' junction not spanned" : ""}`;
   const s = r.summary;
-  if (r.genotype) return r.genotype.summary;
+  if (r.genotype) return `${r.genotype.summary}${r.functional ? ` (${FUNCTIONAL_WORDS[r.functional.call.status] || r.functional.call.status})` : ""}`;
   if (workflow === "snp" || workflow === "tag_small") return `Intended edit ${s.intendedEditPct}%, blocking-only ${s.partialConversionPct}%, indels ${s.indelPct}%, wild type ${s.wtPct}%`;
   if (workflow === "deletion") return `Edited ${s.editedPct}% (deletion between cuts ${s.betweenCutsPct}%), KO score ${s.koScorePct}%`;
   return `Edited ${s.editedPct}%, KO score ${s.koScorePct}%, wild type ${s.wtPct}%`;

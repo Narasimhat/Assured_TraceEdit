@@ -30,6 +30,14 @@ function decideCore(workflow, result, options = {}) {
   if (knock) {
     const alleles = g?.alleles || [];
     if (category === "homozygous_wt" || highWt >= 50) return { decision: "reject", reasons: ["No edit detected, or wild type is the major allele."], next: "Discard." };
+    // With the gene record the call is the functional one (NMD, truncation, splice, in-frame), not the frame alone.
+    const fn = result.functional;
+    if (fn && lowEdited >= opt.koMinEdited && highWt <= opt.wtMaxForKo) {
+      const status = fn.call.status;
+      if (status === "predicted_knockout") return { decision: "accept", reasons: [g.summary, fn.call.text], next: "Confirm loss of protein by Western blot or mass spectrometry; Sanger cannot exclude a large deletion on the second allele." };
+      if (status === "predicted_knockout_with_caveats") return { decision: "hold", reasons: [g.summary, fn.call.text, ...fn.caveats.slice(0, 2)], next: "Loss of function depends on a prediction that can fail (NMD escape, a truncated protein, reinitiation or an isoform): check the protein before using the clone." };
+      return { decision: "hold", reasons: [g.summary, fn.call.text], next: "The protein may still be made: check it by Western blot, or choose another clone." };
+    }
     // a deletion between the two cuts counts as a knockout only if it shifts the frame or removes at least 21 bases, like any other allele (found on held-out data: an in-frame 18-base deletion between the cuts was accepted)
     const allKo = alleles.length > 0 && alleles.every((a) => a.kind !== "wt" && koSize({ size: a.size }));
     if (lowEdited >= opt.koMinEdited && highWt <= opt.wtMaxForKo && allKo) return { decision: "accept", reasons: [g.summary, `Wild type at most ${highWt}%; every called allele shifts the frame or removes at least 21 bases.`], next: opt.goal === "homozygous" ? "Confirm loss of protein; Sanger cannot exclude a large deletion on the second allele." : "Confirm by protein." };

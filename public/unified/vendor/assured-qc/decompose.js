@@ -218,7 +218,7 @@ export function decompose({ prepared, alleles, options = {} }) {
     .filter((entry) => entry.column.representative.kind !== "noise" && entry.fraction >= minFraction)
     .sort((x, y) => y.fraction - x.fraction)
     .map(({ column, fraction, raw }) => ({
-      id: column.representative.id, kind: column.representative.kind, label: column.representative.label, size: column.representative.size,
+      id: column.representative.id, kind: column.representative.kind, label: column.representative.label, size: column.representative.size, sequence: column.representative.sequence,
       fraction, raw, guide: column.representative.guide ?? null, donor: column.representative.donor ?? null,
       carries: column.representative.carries ?? null, intendedPresent: column.representative.intendedPresent ?? null,
       indistinguishable: column.members.length - 1,
@@ -259,7 +259,7 @@ export function decompose({ prepared, alleles, options = {} }) {
     });
     const lin = Float64Array.from(tieBreak, (value, a) => value + (debiased || isFree(columns[a]) ? 0 : shrinkage * sigmaUsed * distance[a]));
     internals = { obs, fitted, use, a0, len, blocks: blocks.map((b) => ({ offset: b.offset, len: b.len, a0: b.a0, reversed: b.reversed, reference: b.reference })), sigma2: ssRes / Math.max(1, positionsUsed * 4),
-      solver: { AtA, Atb, btb, lin, w, ssRes, positionsUsed, n, kinds: columns.map((c) => c.representative.kind), sizes: columns.map((c) => c.representative.size), noiseIndex, wtIndex: columns.findIndex((c) => c.representative.kind === "wt") } };
+      solver: { AtA, Atb, btb, lin, w, ssRes, positionsUsed, n, kinds: columns.map((c) => c.representative.kind), sizes: columns.map((c) => c.representative.size), alleles: columns.map((c) => c.representative), noiseIndex, wtIndex: columns.findIndex((c) => c.representative.kind === "wt") } };
   }
   return {
     internals, perRead,

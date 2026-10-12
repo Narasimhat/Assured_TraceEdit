@@ -50,10 +50,10 @@ function subsetOf(solver, extra) {
  */
 export function profileShare(solver, counted, options = {}) {
   const opt = { ...INTERVAL_DEFAULTS, ...options };
-  const { AtA, Atb, btb, lin, ssRes, positionsUsed, kinds, sizes, noiseIndex } = solver;
+  const { AtA, Atb, btb, lin, ssRes, positionsUsed, kinds, sizes, noiseIndex, alleles } = solver;
   const S = subsetOf(solver, opt.extraColumns); const m = S.length;
   const G = S.map((i) => Float64Array.from(S, (k) => AtA[i][k])); const b = Float64Array.from(S, (i) => Atb[i] - lin[i]); const raw = Float64Array.from(S, (i) => Atb[i]);
-  const isAllele = S.map((i) => i !== noiseIndex); const ind = S.map((i, s) => (isAllele[s] && counted(kinds[i], sizes[i]) ? 1 : 0));
+  const isAllele = S.map((i) => i !== noiseIndex); const ind = S.map((i, s) => (isAllele[s] && counted(kinds[i], sizes[i], alleles ? alleles[i] : undefined) ? 1 : 0));
   const scale = G.reduce((sum, row, i) => sum + row[i], 0) / m; const mu = opt.penalty * scale;
   const ss = (v) => { let cross = 0; let self = 0; for (let i = 0; i < m; i += 1) { if (!v[i]) continue; cross += v[i] * raw[i]; for (let k = 0; k < m; k += 1) if (v[k]) self += v[i] * v[k] * G[i][k]; } return Math.max(0, btb - 2 * cross + self); };
   const share = (v) => { let top = 0; let all = 0; for (let i = 0; i < m; i += 1) if (isAllele[i]) { all += v[i]; top += ind[i] * v[i]; } return all > 0 ? top / all : 0; };
@@ -109,6 +109,11 @@ export function computeIntervals(decomposition, summary, options = {}) {
   const inI = widen(explained * intended.lo, explained * intended.hi, summary.intendedEditPct / 100);
   const koI = widen(explained * ko.lo, explained * ko.hi, summary.koScorePct / 100);
   const out = { wtPct: wtI.map(pct), editedPct: edI.map(pct), intendedEditPct: inI.map(pct), koScorePct: koI.map(pct) };
+  // functional knockout score: the share of alleles predicted to lose function (coding context supplied); same profile, another predicate
+  if (options.lofOf && summary.functionalKoPct !== undefined) {
+    const fk = profileShare(solver, (kind, size, allele) => Boolean(allele && options.lofOf(allele)), options);
+    out.functionalKoPct = widen(explained * fk.lo, explained * fk.hi, summary.functionalKoPct / 100).map(pct);
+  }
   out.detected = out.editedPct[0] >= 1; out.hiddenUpToPct = out.editedPct[1];
   return out;
 }

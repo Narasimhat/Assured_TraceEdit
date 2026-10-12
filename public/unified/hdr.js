@@ -48,6 +48,7 @@ export function estimatedHdr(row,engine){
 export function desiredOutcome(row,engine){
  const targets=targetsOf(row),snp=row.workflow?row.workflow==='snp':targets.length>0;
  const r=engine==='aq'?row.aq:row.te,rows=engine==='aq'?r?.contributions:r?.outcomes;
+ if(!snp && engine==='aq' && r?.functional && Number.isFinite(r.summary?.functionalKoPct))return {value:r.summary.functionalKoPct/100,label:'Predicted functional KO (QC)',status:r.summary.functionalUncertainPct>0?'Uncertain effects - review':'Predicted loss of function',reason:`${r.summary.functionalUncertainPct}% has uncertain functional effects. ${r.functional.call?.text||''} Fitted contributions with coding context; not confirmed protein loss or a probability of knockout. Validate experimentally.`,method:'assured-qc-functional/0.3.0'};
  const label=snp?'Intended edit · best fit':'Out-of-frame · proxy';
  const unavailable=reason=>({value:null,label,status:'Unresolved',reason});
  if(!Array.isArray(rows)||r?.error)return unavailable('Engine outcome data unavailable.');

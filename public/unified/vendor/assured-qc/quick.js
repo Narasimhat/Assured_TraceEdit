@@ -7,8 +7,8 @@ import { wellOf } from "./decision.js";
 
 const ext = (name) => String(name).toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || "";
 export function classifyFiles(names) {
-  const out = { traces: [], sheets: [], designs: [], other: [] };
-  names.forEach((name) => { const e = ext(name); if (e === "ab1" || e === "abi") out.traces.push(name); else if (e === "csv" || e === "tsv" || e === "txt") out.sheets.push(name); else if (e === "json" || e === "html" || e === "htm") out.designs.push(name); else out.other.push(name); });
+  const out = { traces: [], sheets: [], designs: [], genes: [], other: [] };
+  names.forEach((name) => { const e = ext(name); if (e === "ab1" || e === "abi") out.traces.push(name); else if (e === "csv" || e === "tsv" || e === "txt") out.sheets.push(name); else if (e === "json" || e === "html" || e === "htm") out.designs.push(name); else if (e === "gb" || e === "gbk" || e === "gbff" || e === "genbank") out.genes.push(name); else out.other.push(name); });
   return out;
 }
 
@@ -53,7 +53,7 @@ export function inferWorkflow(spec) {
 }
 
 /** One task per sample. `getTrace(name)` returns a parsed trace; the plan (spec) is made once per distinct control, guides and donor. */
-export function planTasks({ pairs, getTrace, design = { kind: "none" }, guides = [], donor = "", nuclease = "SpCas9", workflow = "auto", sampleType = "", goal = "homozygous", baseEditor = null }) {
+export function planTasks({ pairs, getTrace, design = { kind: "none" }, guides = [], donor = "", nuclease = "SpCas9", workflow = "auto", sampleType = "", goal = "homozygous", baseEditor = null, genbank = "", codingOptions = {} }) {
   const cache = new Map(); const tasks = []; const problems = [];
   const designGuides = design.kind === "report" ? design.guides : []; const designDonor = design.kind === "report" ? ((design.donors.find((d) => d.recommended) || design.donors[0] || {}).sequence || "") : "";
   pairs.forEach((pair, index) => {
@@ -62,11 +62,11 @@ export function planTasks({ pairs, getTrace, design = { kind: "none" }, guides =
     if (!cache.has(key)) {
       const control = getTrace(pair.control[0]);
       const sameControl = pairs.filter((p) => p.control[0] === pair.control[0]).slice(0, 6);
-      cache.set(key, planDesign({ designSpec: design.kind === "spec" ? design.spec : null, control, guides: g, donor: d, gene: "sample", nuclease: pair.nuclease || nuclease, baseEditor, editedForCut: g.length || design.kind === "spec" ? [] : sameControl.map((p) => { try { return getTrace(p.edited[0]); } catch { return null; } }).filter(Boolean) }));
+      cache.set(key, planDesign({ designSpec: design.kind === "spec" ? design.spec : null, control, guides: g, donor: d, gene: "sample", nuclease: pair.nuclease || nuclease, baseEditor, genbank, codingOptions, editedForCut: g.length || design.kind === "spec" ? [] : sameControl.map((p) => { try { return getTrace(p.edited[0]); } catch { return null; } }).filter(Boolean) }));
     }
     const plan = cache.get(key);
     if (plan.error) { problems.push(`${pair.sample}: ${plan.error}`); return; }
-    tasks.push({ index: tasks.length, name: pair.sample, spec: plan.spec, workflow: workflow !== "auto" ? workflow : baseEditor ? "base_edit" : (pair.workflow || inferWorkflow(plan.spec)), sampleType: sampleType || pair.type || "clone", controls: pair.control, edited: pair.edited, decisionOptions: { goal }, planNotes: plan.warnings || [], pairing: { confidence: pair.confidence, reason: pair.reason }, well: wellOf(pair.edited[0]) });
+    tasks.push({ index: tasks.length, name: pair.sample, spec: plan.spec, workflow: workflow !== "auto" ? workflow : baseEditor ? "base_edit" : (pair.workflow || inferWorkflow(plan.spec)), sampleType: sampleType || pair.type || "clone", controls: pair.control, edited: pair.edited, decisionOptions: { goal }, options: plan.codingInput ? { codingInput: plan.codingInput } : {}, planNotes: plan.warnings || [], pairing: { confidence: pair.confidence, reason: pair.reason }, well: wellOf(pair.edited[0]) });
   });
   return { tasks, problems };
 }

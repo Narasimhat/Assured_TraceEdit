@@ -30,7 +30,7 @@ export function runJobs(input, onProgress = () => {}) {
     }
     const plan = flow.method === "junction"
       ? (designSpec ? planDesign({ designSpec }) : { error: "Large-insert and reporter checks need the exported design file (it holds the expected knock-in sequence)." })
-      : planDesign({ designSpec, control: controlTrace, guides: manual.guides, donor: manual.donor, gene: manual.gene, nuclease: manual.nuclease, baseEditor: input.baseEditor || null, editedForCut: flow.method === "trace" ? samples.slice(0, 6).map((s) => { try { return parseAbif(s.buffer, s.name); } catch { return null; } }).filter(Boolean) : [] });
+      : planDesign({ designSpec, control: controlTrace, guides: manual.guides, donor: manual.donor, gene: manual.gene, nuclease: manual.nuclease, baseEditor: input.baseEditor || null, genbank: input.genbank || "", codingOptions: input.codingOptions || {}, editedForCut: flow.method === "trace" ? samples.slice(0, 6).map((s) => { try { return parseAbif(s.buffer, s.name); } catch { return null; } }).filter(Boolean) : [] });
     if (plan.error) return { ok: false, error: plan.error };
     if (flow.needsDonor && !(plan.spec.donors || []).length) return { ok: false, error: "This workflow needs a donor: use a design file that has one, or paste the donor sequence." };
     (plan.warnings || []).forEach((w) => notes.push(w));
@@ -43,7 +43,7 @@ export function runJobs(input, onProgress = () => {}) {
         const trace = parseAbif(sample.buffer, sample.name);
         result = flow.method === "junction"
           ? analyseJunction({ name: baseName(sample.name), spec: plan.spec, trace })
-          : analyseSample({ name: baseName(sample.name), spec: plan.spec, control: controlTrace, edited: trace, sampleType, options });
+          : analyseSample({ name: baseName(sample.name), spec: plan.spec, control: controlTrace, edited: trace, sampleType, options: { ...options, codingInput: plan.codingInput || null } });
       } catch (error) {
         result = { name: baseName(sample.name), kind: flow.method === "junction" ? "junction" : "trace-pair", ok: false, error: `Could not read ${sample.name}: ${error.message}`, warnings: [] };
       }

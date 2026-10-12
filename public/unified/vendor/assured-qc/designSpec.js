@@ -39,6 +39,24 @@ export function validateDesignSpec(spec) {
     } else warnings.push(`${label}: protospacer position not given; the cut index is taken as stated.`);
   });
 
+  // Optional coding block (the gene region and its coding exons, written by the design app): checked for consistency with the reference window.
+  if (spec.coding !== undefined && spec.coding !== null) {
+    const block = spec.coding; const cseq = String(block.sequence || "").toUpperCase(); const segments = Array.isArray(block.segments) ? block.segments : [];
+    if (!isDna(cseq)) fail("coding.sequence must be A, C, G and T only.");
+    if (!segments.length) fail("coding.segments must list the coding exons ([start, end] pairs).");
+    let total = 0; let previous = -1;
+    segments.forEach((pair, index) => {
+      const [s, e] = Array.isArray(pair) ? pair : [];
+      if (!Number.isInteger(s) || !Number.isInteger(e) || s < 0 || e > cseq.length || e <= s) fail(`coding segment ${index + 1} is not a valid interval inside coding.sequence.`);
+      else { if (s < previous) fail("coding.segments must be in order and must not overlap."); previous = e; total += e - s; }
+    });
+    if (segments.length && total % 3 !== 0) warnings.push(`The coding segments add up to ${total} nt, not a multiple of three; the functional knockout assessment will not use them.`);
+    if (Number.isInteger(spec.reference?.offset) && Number.isInteger(block.offset) && !spec.reference?.mirrored) {
+      const from = spec.reference.offset - block.offset;
+      if (from < 0 || cseq.slice(from, from + length) !== reference) fail("coding.sequence does not contain the reference window at the stated offsets.");
+    }
+  }
+
   const markers = spec.markers || [];
   markers.forEach((marker, index) => {
     inside(marker.pos, `Marker ${index + 1} position`, length - 1);
