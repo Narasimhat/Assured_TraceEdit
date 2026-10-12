@@ -114,6 +114,9 @@ def build_visual_report(bundle,indices,out,title,height,caption,centers,labels):
         bins=outcome_bins(r)
         finding='; '.join(f'{k}: {v*100:.1f}%' for k,v in sorted(bins.items(),key=lambda kv:-kv[1]) if v>=.05)
         if not r.get('metrics'):finding='No call: '+r.get('error','Analysis failed')
+        prediction=r.get('knockoutPrediction') or {}
+        if prediction.get('value') is not None:
+            finding+=f" | Possible KO contribution {prediction['value']*100:.1f}% (predictive). "+r.get('westernBlot',{}).get('priority','')+'; TraceEdit only.'
         name=Path(r['sample']).stem
         key_rows.append([p(r['_display_id'],'CellSmall'),p(name,'CellSmall'),p(finding,'CellSmall')])
     table=Table(key_rows,colWidths=[32,239,240],repeatRows=1)

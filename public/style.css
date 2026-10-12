@@ -4,3 +4,5 @@
 .design-import{margin-bottom:22px;background:#f0f6f0}.design-import p,#donor-status{font-size:12px;line-height:1.6;color:#526e5d}#donor{min-height:130px;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere}
 
 .deletion-card{border:1px solid #cbdad5;border-radius:10px;padding:18px;margin:16px 0;background:#fff}.deletion-evidence pre{font-size:14px;line-height:1.7}.deletion-card p{max-width:90ch}
+
+.compact-ko{padding:18px;background:#e6f2ed;border-radius:12px;margin:18px 0}.compact-ko .heading{display:flex;justify-content:space-between;align-items:center;gap:20px}.compact-ko strong{display:block;font-size:34px}.compact-ko .effect-bar{height:12px;display:flex;background:#e4e8e4;border-radius:8px;overflow:hidden;margin:14px 0 8px}.compact-ko .effect-key{display:flex;gap:20px;font-size:12px;margin-bottom:12px}

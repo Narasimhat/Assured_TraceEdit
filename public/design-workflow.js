@@ -1,5 +1,5 @@
 'use strict';
-let importedDesigns = [], mappedVariantText = '';
+let importedDesigns = [], mappedVariantText = '', importedDesignHtml='';
 function clearMappedVariants() {
   if (mappedVariantText && $('variants').value === mappedVariantText) $('variants').value = '';
   mappedVariantText = '';
@@ -28,6 +28,7 @@ function useDesign() {
   $('donor-choice-label').hidden=design.donors.length<2;
   $('design-status').textContent=`${design.title}: imported ${design.guides.length} gRNA(s), without PAM, and ${design.donors.length} donor option(s).${design.guides.length>2?' Choose at most two gRNAs below before analysis.':''}${!design.donors.length?' No supported ssODN found; for a substitution design, paste the donor below.':''} Previous cut/SNP coordinates were cleared because they belong to the prior design.`;
   useDonor();
+  window.TraceEditCoding?.design(importedDesignHtml,design.title);
 }
 $('design-choice').onchange=useDesign;
 $('donor-choice').onchange=useDonor;
@@ -36,7 +37,7 @@ $('design-file').onchange=async()=>{
     if(busy)throw Error('Wait for analysis to finish before importing a design.');
     const file=$('design-file').files[0]; if(!file)return;
     if(file.size>5_000_000)throw Error('Design HTML must be smaller than 5 MB.');
-    const designs=TraceEditDesign.parse(await file.text());
+    importedDesignHtml=await file.text();const designs=TraceEditDesign.parse(importedDesignHtml);
     importedDesigns=designs;
     $('design-choice').replaceChildren();
     designs.forEach((d,i)=>{const option=node('option',d.title);option.value=i;$('design-choice').append(option);});

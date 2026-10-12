@@ -5,6 +5,8 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 files = [root/'app.py', root/'engine.py', root/'knockout_prediction.py', root/'reference_api.py', root/'public/unified.html', root/'public/workspace-version.js']
+files += [root/'public'/name for name in ['app.js','index.html','standalone-coding.js','design-workflow.js','style.css']]
+files += [root/'visual_report.py']
 files += sorted((root/'public/unified').rglob('*.js'))
 files += sorted((root/'public/unified').rglob('*.css'))
 digest = hashlib.sha256(b''.join(p.relative_to(root).as_posix().encode()+b'\0'+p.read_bytes().replace(b'\r\n', b'\n') for p in files)).hexdigest()[:12]

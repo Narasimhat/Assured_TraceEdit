@@ -8,6 +8,14 @@ test('reference filename is scoped to the selected design and ambiguous names st
  assert.equal(readAnnotations(html,'Design: B').reference,'other.gb');
  assert.equal(readAnnotations('<h1>X</h1><p>Reference a.gb</p><p>Reference b.gb</p>','X').reference,null);
 });
+test('standalone screening uses only native evidence and explicitly labels its scope',async()=>{
+ const {koAssessment}=await import('../public/unified/knockout.js');
+ const row={knockoutPrediction:{value:.95,coding_truncating:.95,splice_disruptive:0,nmd_susceptible:.95,in_frame:0,unresolved:.05,control_sha256:'c'},te:{source_hashes:{control:'c'},metrics:{r_squared:.99},alignment:{baseline_mae:.01,sample_q20_fraction:.99},inference:{control_q20_fraction:.99},outcomes:[],warnings:[]}};
+ assert.equal(koAssessment(row).priority,'Review before Western blot');
+ const native=koAssessment(row,'clone','traceedit');assert.equal(native.priority,'Prioritize for Western blot');assert.match(native.reasons.join(' '),/agreement has not been checked/);
+ row.te.metrics.r_squared=.8;assert.equal(koAssessment(row,'clone','traceedit').priority,'Review before Western blot');
+ assert.match(koAssessment(row,'pool','traceedit').priority,/Pool only/);
+});
 test('WB priority requires coding evidence, matching sources, quality and engine agreement',async()=>{
  const {koAssessment}=await import('../public/unified/knockout.js');
  const row={knockoutPrediction:{value:.95,coding_truncating:0,splice_disruptive:.95,nmd_susceptible:0,in_frame:0,unresolved:.05,control_sha256:'c'},aq:{ok:true,controlHash:'c',sampleHash:'s',r2:.99,contributions:[{size:-79,fraction:1}],warnings:[]},te:{source_hashes:{control:'c',sample:'s'},metrics:{r_squared:.99},alignment:{baseline_mae:.01,sample_q20_fraction:.99},inference:{control_q20_fraction:.99},outcomes:[{net_bp:-79,fraction:1}],warnings:[]}};
