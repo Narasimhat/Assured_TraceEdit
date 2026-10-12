@@ -8,7 +8,9 @@ export function readAnnotations(html,title){
  const codons=[...text.matchAll(/Codon:\s*([ACGT]{3})\s*(?:->|→)\s*([ACGT]{3})/gi)].map(m=>({ref:m[1].toUpperCase(),alt:m[2].toUpperCase()}));
  const unique=[...new Map(codons.map(c=>[c.ref+'>'+c.alt,c])).values()];
  const blocking=[...text.matchAll(/p\.([A-Z])\d+\1\s*[:(]\s*([ACGT]{3})\s*(?:->|→)\s*([ACGT]{3})/gi)].map(m=>({ref:m[2].toUpperCase(),alt:m[3].toUpperCase()}));
- return {intended:unique.length===1?unique[0]:null,blocking:[...new Map(blocking.map(c=>[c.ref+'>'+c.alt,c])).values()],title};
+ const walker=doc.createTreeWalker(range.cloneContents(),4);const words=[];while(walker.nextNode())words.push(walker.currentNode.textContent);const referenceText=words.join(' ').replace(/\s+/g,' ');
+ const references=[...new Set([...referenceText.matchAll(/Reference\s*:?[\s]+([\w .()\-]+?\.(?:gb|gbk|genbank))\b/gi)].map(m=>m[1].trim()))];
+ return {reference:references.length===1?references[0]:null,intended:unique.length===1?unique[0]:null,blocking:[...new Map(blocking.map(c=>[c.ref+'>'+c.alt,c])).values()],title};
 }
 export function mapAnnotations(annotation,sequence,variants){
  const key=v=>`${v.position}:${v.ref}>${v.alt}`,known=new Set(variants.map(key));

@@ -14,6 +14,10 @@ The main workspace guides users through **Edit → Reads → Results**. Optional
 
 Deletion review groups sequence-identical proposals, shows missing segments and predicted junctions, and retains breakpoint ambiguity. Peaksplit offers a reversible project reset and requires explicit control pairing.
 
+## Coding-aware knockout screening (v1.3)
+
+The unified workspace reads a GenBank reference filename from the selected design HTML and resolves it from the local catalog without a second upload. It annotates supported TraceEdit outcomes against a selected CDS, separates premature-stop frameshifts from canonical splice-site disruptions, and reports rule-based NMD predictions where exon information permits. Possible-KO contributions and provisional Western blot priorities appear on screen and in combined HTML, CSV and JSON exports. These are screening predictions, not confirmed functional knockouts. Online filename-only designs cannot access the local reference catalog. See [methods and limitations](UNIFIED_ANALYSIS.md).
+
 ## Saved project setup and review
 
 In Edit, expand **Project setup · save or reuse** to save the gene, cell line, primer, edit goal and current design fields. Setups remain in this browser's local storage; raw AB1 files are not saved. Re-select reads for each batch. Clearing site data removes saved setups; export analysis JSON to retain the run's review record.

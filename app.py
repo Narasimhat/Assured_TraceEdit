@@ -26,6 +26,8 @@ if not HOSTED:
     app.register_blueprint(catalog_api)
     from batch_api import batch_api
     app.register_blueprint(batch_api)
+    from reference_api import reference_api
+    app.register_blueprint(reference_api)
 
 @app.before_request
 def request_limit():
@@ -46,6 +48,16 @@ def oversized(error): return jsonify(error='Request too large. Use files or a fi
 
 @app.get('/')
 def index(): return send_from_directory(HERE/'public','unified.html')
+
+@app.post('/api/knockout-prediction')
+def knockout_prediction():
+    from knockout_prediction import predict
+    control=uploaded('control')
+    try: result=json.loads(request.form.get('result','{}'))
+    except Exception: raise ValueError('Invalid outcome data.')
+    if result.get('source_hashes',{}).get('control')!=control.sha256:raise ValueError('Prediction control does not match the fitted result.')
+    if not result.get('metrics'):raise ValueError('A successful native fit is required.')
+    return jsonify(predict(control,request.form.get('reference',''),result.get('outcomes',[]),request.form.get('transcript','')))
 
 @app.get('/peaksplit/')
 def peaksplit_index(): return send_from_directory(HERE/'public'/'peaksplit','index.html')
