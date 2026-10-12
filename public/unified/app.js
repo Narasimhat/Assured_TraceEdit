@@ -9,6 +9,7 @@ import {readAnnotations,mapAnnotations} from './annotations.js';
 import {VERSION,dna,targetsOf,variantKey,percent,validateSetup,compare,escapeHtml as esc} from './core.js';
 import {parseDesignReport} from './vendor/assured-qc/designReport.js';
 import {csvReport,reportHtml,traceSvg,targetSignals,interpretation,signalRange,engineReportHtml,nativeTraceEditRequest} from './report.js';
+import {filesFromDataTransfer,pickDirectoryFiles} from './files-io.js';
 const $=id=>document.getElementById(id), el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
 const fields=['name','gene','cell','primer','workflow','sampleType','guides','donor','ko-transcript'];
 const storeKey='assured-analysis.setups.v1';
@@ -92,15 +93,29 @@ $('use-import').onclick=handle(async()=>{const r=selectedImport();if(!r)throw Er
  clearReads();$('saved').value='';$('name').value=r.projectId?`${r.projectId} · ${r.gene}`:r.title;$('gene').value=r.gene||'';$('cell').value=r.cell||'';$('primer').value='';$('guides').value=chosen.map(g=>g.sequence).join('\n');$('donor').value=ds.map(d=>d.sequence).join('\n\n');$('workflow').value=d?'snp':r.workflow||'knockout';source={file:r.file,sha256:r.hash,title:r.title,guideChoice:chosen.map(g=>g.name),donorChoice:ds.map(d=>d.name),annotations:r.annotations};invalidate();syncWorkflowUi();await resolveCodingReference();say('Design copied. Review the chosen guides/donor and continue to reads. Sequencing primer is optional metadata; match controls to samples from the same amplicon and primer. Alternative guides must not be combined unless they were used together.');});
 $('design-button').onclick=()=>$('design-file').click();
 $('design-file').onchange=handle(async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(f.size>5000000)throw Error('HTML report must be under 5 MB.');const text=await f.text(),fileHash=await hash(await f.arrayBuffer());const records=parseDesignReport(text);imports=records.map((r,i)=>({...r,annotations:readAnnotations(text,r.title),id:String(i),file:f.name,hash:fileHash,gene:r.title.replace(/^Design:\s*/i,'').split(/[\s:]/)[0],workflow:r.donors.length?'snp':'knockout'}));$('import-panel').hidden=false;$('import-status').textContent=`${f.name}: ${records.length} design(s). Select guides and donor before applying.`;$('import-search').value='';importOptions();say();});
-async function addFiles(list){if(busy)return;lock(true);try{let added=0,skipped=0;const warnings=[];for(const f of Array.from(list)){
+async function addFiles(list){if(busy)return;const incoming=Array.from(list||[]);if(!incoming.length){say('No files found. Choose AB1/ABI traces, or drop a folder that contains them.','error');return;}
+ lock(true);try{let added=0,skipped=0;const warnings=[];for(const f of incoming){
  if(!/\.(ab1|abi)$/i.test(f.name)){skipped++;continue;}if(f.size>2000000){warnings.push(`${f.name}: exceeds 2 MB`);continue;}if(files.length>=500){warnings.push('File limit reached (500).');break;}
  const bytes=await f.arrayBuffer();if(new TextDecoder().decode(bytes.slice(0,4))!=='ABIF'){warnings.push(`${f.name}: not an ABIF trace`);continue;}const digest=await hash(bytes);if(files.some(r=>r.hash===digest)){warnings.push(`${f.name}: identical read already added`);continue;}
  const id=String(++serial),role=/(^|[_.\-\s])(wt|control|ctrl|wet[u]?[-_]c)([_.\-\s]|$)/i.test(f.name)?'control':'sample';files.push({id,file:f,hash:digest,role,control:'',label:`${f.name} · #${id}`,folder:f.webkitRelativePath||'Selected file'});added++;
  }invalidate();renderFiles();
  const samples=files.filter(f=>f.role==='sample').length;
  if(samples>SAMPLE_LIMIT)warnings.push(`Analysis accepts at most ${SAMPLE_LIMIT} samples; remove ${samples-SAMPLE_LIMIT} before running.`);
- say(`${added} reads added; ${files.length} retained. ${skipped?`${skipped} non-AB1 files ignored. `:''}${warnings.join('; ')}`);}finally{lock(false);}}
-$('files-button').onclick=()=>$('trace-files').click();$('folder-button').onclick=()=>$('trace-folder').click();for(const id of ['trace-files','trace-folder'])$(id).onchange=handle(e=>{const list=Array.from(e.target.files);e.target.value='';return addFiles(list);});$('drop').ondragover=e=>e.preventDefault();$('drop').ondrop=handle(e=>{e.preventDefault();return addFiles(e.dataTransfer.files);});
+ if(!added&&!warnings.length)say(skipped?`No AB1/ABI traces found (${skipped} other file${skipped===1?'':'s'} ignored).`:'No AB1/ABI traces found in that selection.','error');
+ else say(`${added} reads added; ${files.length} retained. ${skipped?`${skipped} non-AB1 files ignored. `:''}${warnings.join('; ')}`);}finally{lock(false);}}
+$('files-button').onclick=()=>$('trace-files').click();
+$('folder-button').onclick=handle(async()=>{
+ let picked=null;
+ try{picked=await pickDirectoryFiles();}
+ catch{picked=null;}
+ if(picked===null){$('trace-folder').click();return;}
+ if(picked.length)return addFiles(picked);
+});
+for(const id of ['trace-files','trace-folder'])$(id).onchange=handle(e=>{const list=Array.from(e.target.files||[]);e.target.value='';if(list.length)return addFiles(list);});
+const drop=$('drop');
+drop.ondragenter=drop.ondragover=e=>{e.preventDefault();e.dataTransfer.dropEffect='copy';drop.classList.add('over');};
+drop.ondragleave=e=>{if(!drop.contains(e.relatedTarget))drop.classList.remove('over');};
+drop.ondrop=handle(async e=>{e.preventDefault();drop.classList.remove('over');return addFiles(await filesFromDataTransfer(e.dataTransfer));});
 function renderFiles(){const controls=files.filter(f=>f.role==='control');$('file-count').textContent=`${files.length} reads retained · ${controls.length} controls · ${files.filter(f=>f.role==='sample').length} samples`;$('file-rows').replaceChildren();for(const f of files){if(!controls.some(c=>c.id===f.control))f.control='';if(f.role==='sample'&&!f.control&&controls.length===1)f.control=controls[0].id;const row=el('tr'),name=el('td',f.label);name.className='wrap';name.append(el('small',f.folder));const role=el('select');role.setAttribute('aria-label',`Role ${f.label}`);['sample','control','ignore'].forEach(r=>role.append(new Option(r,r)));role.value=f.role;role.onchange=()=>{f.role=role.value;invalidate();renderFiles();};const rt=el('td');rt.append(role);const ct=el('td');if(f.role==='sample'){const c=el('select');c.setAttribute('aria-label',`Control ${f.label}`);c.append(new Option('Choose matching control…',''));controls.forEach(v=>c.append(new Option(v.label,v.id)));c.value=f.control;c.onchange=()=>{f.control=c.value;invalidate();};ct.append(c);}else ct.textContent='—';const remove=el('button','Remove');remove.className='secondary';remove.onclick=()=>{files=files.filter(r=>r.id!==f.id);invalidate();renderFiles();};const td=el('td');td.append(remove);row.append(name,rt,ct,td);$('file-rows').append(row);}}
 function pairs(){const samples=files.filter(f=>f.role==='sample');if(!samples.length||samples.length>SAMPLE_LIMIT)throw Error(`Select 1–${SAMPLE_LIMIT} sample reads.`);return samples.map(s=>{const c=files.find(f=>f.id===s.control&&f.role==='control');if(!c)throw Error(`Choose a control for ${s.label}.`);if(c.file.size+s.file.size>3900000)throw Error(`Pair ${s.label} exceeds the 4 MB request limit.`);return {sample:s,control:c};});}
 const input=async f=>({name:f.file.name,buffer:await f.file.arrayBuffer()});
