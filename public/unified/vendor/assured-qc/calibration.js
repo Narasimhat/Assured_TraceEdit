@@ -12,7 +12,7 @@ export const PROTEIN_WORDS = {
 };
 export const RNA_WORDS = { decayed: ["decayed", "reduced", "low", "decay", "nmd", "down", "lost"], stable: ["stable", "normal", "unchanged", "present", "wt", "no decay", "no change"] };
 
-const normalise = (value, table) => {
+export const normalise = (value, table) => {
   const text = String(value ?? "").trim().toLowerCase(); if (!text) return null;
   for (const [key, words] of Object.entries(table)) if (words.includes(text)) return key;
   return "unrecognised";

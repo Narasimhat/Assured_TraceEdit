@@ -46,5 +46,5 @@ export function simpleResult(row,sampleType='clone',evidence='dual'){
 }
 export function koCard(row,sampleType='clone',evidence='dual'){
  const s=simpleResult(row,sampleType,evidence);
- return `<section class="goal-card compact-ko"><div class="heading"><div><small>Editing (TraceEdit)</small><strong>${s.editing===null?'Unavailable':percent(s.editing)}</strong></div><div><b>${esc(s.deletion)}</b><p>${esc(s.status)}</p></div></div><small>Editing estimate, not confirmed protein knockout.</small><details><summary>Coding prediction &amp; evidence</summary>${detailedKoCard(row,sampleType,evidence)}</details></section>`;
+ return `<section class="goal-card compact-ko"><div class="heading"><div><small>Indels · QC / TraceEdit</small><strong>${evidence==='traceedit'?'':Number.isFinite(row.aq?.summary?.indelPct)?row.aq.summary.indelPct.toFixed(1)+'% / ':'— / '}${s.editing===null?'Unavailable':percent(s.editing)}</strong></div><div><b>${esc(s.deletion)}</b><p>${esc(s.status)}</p></div></div><small>Editing estimate, not confirmed protein knockout.</small><details><summary>Coding prediction &amp; evidence</summary>${detailedKoCard(row,sampleType,evidence)}</details></section>`;
 }

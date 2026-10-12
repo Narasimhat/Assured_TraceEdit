@@ -53,7 +53,7 @@ export function buildModels(gb, { gene = "", transcript = "" } = {}) {
     let segs = strand === "+" ? f.location.segments.map(([s, e]) => [s, e]) : f.location.segments.map(([s, e]) => [Lg - e, Lg - s]).reverse();
     const codonStart = Number(qualifier(f, "codon_start") || 1); if (codonStart > 1) segs[0][0] += codonStart - 1;
     const cdsSeq = segs.map(([s, e]) => T.slice(s, e)).join("");
-    if (cdsSeq.length % 3 !== 0) warnings.push(`CDS ${i + 1} has a length that is not a multiple of three; skipped.`);
+    if (cdsSeq.length % 3 !== 0) warnings.push(`A CDS feature of the record (${qualifier(f, "gene") || qualifier(f, "product") || `CDS ${i + 1}`}) is partial or not a multiple of three nucleotides and was not used.`);
     if (cdsSeq.length % 3 !== 0 || cdsSeq.length < 6) return;
     const { protein } = translate(cdsSeq);
     models.push({
@@ -301,7 +301,9 @@ export function assessOnModel(model, edit0, options = {}) {
   const siteWord = damaged.map((x) => `${x.donor ? "donor" : ""}${x.donor && x.acceptor ? " and " : ""}${x.acceptor ? "acceptor" : ""} site of intron ${x.j + 1}`).join("; ");
   const skip = evaluatePieces(model, edit, skipPieces, opt); const retain = evaluatePieces(model, edit, retainPieces, opt);
   const a = classifyOutcome(model, edit, skip, firstOrig, c0, c1, opt, ctx); const b = classifyOutcome(model, edit, retain, firstOrig, c0, c1, opt, ctx);
-  const details = { splice: { sites: siteWord, skippedExons: names, skipping: { class: a.class, lof: a.lof, summary: a.summary }, retention: { class: b.class, lof: b.lof, summary: b.summary } } };
+  // residues of the original protein that exon skipping keeps: those encoded before the first skipped exon (the figure of predicted products draws them)
+  if (skipIdx.size) { const firstSkipped = Math.min(...[...skipIdx].map((i) => pieces[i].orig[0])); a.details = { ...(a.details || {}), keptAa: Math.floor(model.exonLens.slice(0, firstSkipped).reduce((s, n) => s + n, 0) / 3) }; }
+  const details = { splice: { sites: siteWord, skippedExons: names, skipping: { class: a.class, lof: a.lof, summary: a.summary, details: a.details }, retention: { class: b.class, lof: b.lof, summary: b.summary, details: b.details } } };
   if (a.lof === true && b.lof === true) return { class: "lof_splice", lof: true, summary: `Canonical splice site destroyed (${siteWord}). Exon skipping (${names}): ${a.summary} Intron retention: ${b.summary}`, details };
   return { class: "splice_uncertain", lof: null, summary: `Canonical splice site destroyed (${siteWord}). Exon skipping (${names}): ${a.summary} Intron retention: ${b.summary} The outcome depends on which is used; RT-PCR across the exons shows it.`, details };
 }
@@ -321,6 +323,13 @@ export function buildCodingContext(genbank, input = {}) {
   if (!models.length) return { ok: false, error: "The gene record has no usable CDS feature." };
   const loc = locateWindow(gb.sequence, reference);
   if (!loc) return { ok: false, error: "The reference sequence of this design was not found in the gene record (it must match the record's genomic sequence to within 10%)." };
+  // A genomic record often carries the neighbouring gene as well: keep the coding sequences of the gene the reference window lies in (or, if the window lies in none, leave them all)
+  const bodyOverlap = (model) => { const map = windowMapper(loc, reference.length, model.Lg, model.strand); const w = map({ s: 0, e: reference.length, ins: "" }); const lo = Math.min(w.s, w.e); const hi = Math.max(w.s, w.e); return Math.min(hi, model.segs[model.segs.length - 1][1]) - Math.max(lo, model.segs[0][0]); };
+  const inside = models.filter((m) => bodyOverlap(m) > 0);
+  if (inside.length && inside.length < models.length) {
+    const genes = new Set(inside.map((m) => m.gene || m.id)); const keep = models.filter((m) => genes.has(m.gene || m.id));
+    if (keep.length < models.length) { warnings.push(`${models.length - keep.length} coding sequence${models.length - keep.length === 1 ? "" : "s"} of other genes in the record ${models.length - keep.length === 1 ? "was" : "were"} ignored.`); models.splice(0, models.length, ...keep); }
+  }
   if (!loc.covered) warnings.push("The reference window extends beyond the gene record; edits there are not modelled.");
   const primary = models[0];
   const context = { gb: { locus: gb.locus, accession: gb.accession, definition: gb.definition }, models, location: loc, warnings, referenceLength: reference.length, regions: input.regions || [], epitope: input.epitope || null, reference, geneStrand: primary.strand,
@@ -391,7 +400,7 @@ export function assessFunction(context, contributions, options = {}) {
     confirm.push("Sanger cannot exclude a large deletion on the other allele or an off-target event; check zygosity by out-out PCR when it matters.");
   }
   return { rows, score: { lof: lofShare, uncertain: uncertainShare, lofPct: Math.round(lofShare * 1000) / 10, uncertainPct: Math.round(uncertainShare * 1000) / 10, notLofPct: Math.round((1 - lofShare - uncertainShare) * 1000) / 10 }, call: { status, text }, caveats, confirm, donorEdits,
-    context: { transcript: context.models[0].id, gene: context.models[0].gene, proteinLength: context.models[0].protLen, codingExons: context.models[0].segs.length, isoforms: context.models.length, windowIdentity: Math.round(context.location.identity * 1000) / 10, accession: context.gb.accession } };
+    context: { transcript: context.models[0].id, gene: context.models[0].gene, proteinLength: context.models[0].protLen, codingExons: context.models[0].segs.length, exonLengths: context.models[0].exonLens, regions: context.regions || [], epitope: context.epitope || null, isoforms: context.models.length, windowIdentity: Math.round(context.location.identity * 1000) / 10, accession: context.gb.accession } };
 }
 
 /** The part of the context that is safe to ship to a worker or write to JSON: no sequences. */

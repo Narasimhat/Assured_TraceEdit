@@ -1,6 +1,6 @@
 import {escapeHtml as esc,percent} from './core.js';
 import {simpleResult} from './knockout.js';
-export function outcomeGraph(rows,sampleType='clone',native=false,interactive=false){
+function nativeOutcomeGraph(rows,sampleType='clone',native=false,interactive=false){
  const width=900,height=184+rows.length*78;
  const items=rows.map((r,i)=>{const t=native?r:r.te;const simple=simpleResult(native?{te:t,knockoutPrediction:r.knockoutPrediction,contextVerified:r._contextVerified}:r,r.sampleType||sampleType,native?'traceedit':'dual');return {r,i,t,a:simple.assessment,...simple};});
  const ready=items.filter(x=>x.status==='Test by Western blot').length,missing=items.filter(x=>x.editing===null).length;
@@ -18,5 +18,44 @@ export function outcomeGraph(rows,sampleType='clone',native=false,interactive=fa
  });
  body+=`<text x="28" y="${height-14}" font-size="12" fill="#7b8b83">Editing estimate, not confirmed knockout. Select a sample for traces and coding evidence.</text></g>`;
  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" style="display:block;width:100%;min-width:690px;height:auto" role="${interactive?'group':'img'}" aria-label="Editing results by sample">${body.replace(/font-size="([0-9]+)"/g,'style="font-size:$1px"')}</svg>`;
+}
+export function modelScores(row){
+ const a=row.aq,t=row.te,p=row.knockoutPrediction;
+ const aqOk=a?.ok&&!a.error,teOk=!!t?.metrics&&!t.error;
+ const teCoding=teOk&&!!p?.control_sha256&&p.control_sha256===t.source_hashes?.control&&Number.isFinite(p.value);
+ return {aq:{indel:aqOk&&Number.isFinite(a.summary?.indelPct)?a.summary.indelPct/100:null,ko:aqOk&&a.functional&&Number.isFinite(a.summary?.functionalKoPct)?a.summary.functionalKoPct/100:null,uncertain:aqOk&&Number.isFinite(a.summary?.functionalUncertainPct)?a.summary.functionalUncertainPct/100:null},te:{indel:teOk&&Number.isFinite(t.metrics.indel_fraction)?t.metrics.indel_fraction:null,ko:teCoding?p.value:null,uncertain:null}};
+}
+export function outcomeGraph(rows,sampleType='clone',native=false,interactive=false){
+ if(native)return nativeOutcomeGraph(rows,sampleType,native,interactive);
+ const width=1080,height=220+rows.length*112;
+ const text=(x,y,value,size=14,color='#284249',weight=400)=>`<text x="${x}" y="${y}" style="font-size:${size}px" fill="${color}" font-weight="${weight}">${esc(value)}</text>`;
+ const bar=(x,y,value,color,uncertain=null)=>{
+  if(!Number.isFinite(value))return `<line x1="${x}" x2="${x+160}" y1="${y+6}" y2="${y+6}" stroke="#bbc8cd" stroke-dasharray="4 4"/>`+text(x+165,y+11,'—',14,'#70818a');
+  const clamp=v=>Math.max(0,Math.min(1,v));
+  let out=`<rect x="${x}" y="${y}" width="160" height="12" rx="5" fill="#e9eef1"/><rect x="${x}" y="${y}" width="${160*clamp(value)}" height="12" rx="4" fill="${color}"/>`;
+  if(uncertain>0)out+=`<rect x="${x+160*clamp(value)}" y="${y}" width="${160*Math.min(clamp(uncertain),1-clamp(value))}" height="12" fill="url(#qc-uncertain)"/>`;
+  return out+text(x+165,y+11,value===0&&uncertain>0?'Uncertain':percent(value),12,color,600);
+ };
+ let body=`<title>Two-model clone screening</title><desc>Indel estimates and coding-aware knockout estimates for Assured QC and TraceEdit. QC functional loss and TraceEdit possible disruption have different definitions; scores are not averaged.</desc><defs><pattern id="qc-uncertain" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#fff0d0"/><path d="M0 6L6 0" stroke="#d4a14a"/></pattern></defs><rect width="1080" height="${height}" rx="18" fill="white"/>`;
+ body+=text(25,36,sampleType==='pool'?'Pool screening':'Clone screening',25,'#183c43',650)+text(25,62,'Two models. One next step. Select a sample for evidence.',14);
+ body+=text(25,108,'SAMPLE / DELETION',12)+text(300,108,'INDEL SCORE',13,'#183c43',600)+text(650,108,'KNOCKOUT PREDICTION',13,'#183c43',600)+text(890,108,'NEXT STEP',12);
+ for(const x of [310,650]){body+=text(x,130,'0%',11,'#73848a')+text(x+133,130,'100%',11,'#73848a');}
+ rows.forEach((r,i)=>{
+  const y=155+i*112,s=modelScores(r),simple=simpleResult(r,sampleType);let status=simple.status;
+  if(!r.aq?.ok&&r.te?.metrics)status='Review model failure';
+  const color=status==='Test by Western blot'?'#19786c':status==='Resequence'?'#9e4545':'#886222';
+  const name=(r.sample||'Sample').replace(/\.ab1.*$/i,'');const match=name.match(/^cl(\d+)_/i);const short=match?'Clone '+match[1]:name.length>22?name.slice(0,21)+'â€¦':name;
+  body+=`<g ${interactive?`role="button" tabindex="0" data-sample="${i}" aria-label="Inspect ${esc(r.sample)}" style="cursor:pointer"`:''}><title>${esc(r.sample)}; ${esc(status)}</title>`;
+  body+=text(25,y+16,short,17,'#183c43',600)+text(25,y+40,simple.deletion,13,'#70818a');
+  body+=text(245,y+13,'QC',12,'#287b89',600)+text(245,y+48,'TE',12,'#7760aa',600);
+  body+=bar(310,y,s.aq.indel,'#287b89')+bar(310,y+35,s.te.indel,'#7760aa');
+  body+=text(545,y+12,'Functional',11,'#287b89')+text(545,y+47,'Possible',11,'#7760aa');
+  body+=bar(650,y,s.aq.ko,'#287b89',s.aq.uncertain)+bar(650,y+35,s.te.ko,'#7760aa');
+  if(s.aq.uncertain>0)body+=text(650,y+77,percent(s.aq.uncertain)+' uncertain',11,'#99732d');
+  body+=`<rect x="885" y="${y+10}" width="178" height="32" rx="16" fill="${status==='Test by Western blot'?'#e4f2ed':'#f5eee1'}"/>`+text(897,y+31,status,12,color,600);
+  body+=`<line x1="25" x2="1055" y1="${y+94}" y2="${y+94}" stroke="#e8eef0"/></g>`;
+ });
+ body+=text(25,height-36,'QC: predicted functional loss. TE: possible coding or splice disruption. Hatched amber: uncertain QC effect.',12)+text(25,height-14,'These are fitted contributions, not knockout probabilities. Validate protein loss; no averaged score.',12);
+ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" style="display:block;width:100%;min-width:860px;height:auto;font-family:Segoe UI,Arial,sans-serif" role="${interactive?'group':'img'}" aria-label="Two-model editing and knockout results">${body}</svg>`;
 }
 export function bindOutcomeGraph(host,inspect){host.querySelectorAll('[data-sample]').forEach(n=>{n.onclick=()=>inspect(Number(n.dataset.sample));n.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(Number(n.dataset.sample));}};});}

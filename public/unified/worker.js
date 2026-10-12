@@ -1,3 +1,5 @@
+import {packQcResult} from './qc-report-adapter.js';
+import {decide} from './vendor/assured-qc/decision.js';
 import {donorsOf,targetsOf} from './core.js';
 import {parseAbif} from './vendor/assured-qc/abif.js';
 import {planDesign,codingFor} from './vendor/assured-qc/batch.js';
@@ -41,6 +43,10 @@ self.onmessage=async ({data:m})=>{
     if(!r.ok)throw Error(r.error);
     const markers=r.markerReadout.map(v=>({position:v.marker.pos+1,ref:v.marker.ref,alt:v.marker.alt,role:v.marker.role,covered:v.covered,raw:v.altEdited,control:v.altControl,corrected:v.altNet,inFit:v.marker.pos>=r.prepared.window.start && v.marker.pos<r.prepared.window.end}));
     const result={ok:true,engineVersion:QC_VERSION,functional:r.functional,confidence:r.confidence,intervals:r.intervals,summary:r.summary,r2:r.decomposition.r2,markers,warnings:[...(m.planWarnings||[]),...r.warnings],contributions:r.decomposition.contributions,genotype:r.genotype,window:r.prepared.window,options,controlHash:await hash(m.control.buffer),sampleHash:await hash(m.sample.buffer)};
+    result.standalone=packQcResult(r,m.sample.name,spec,m.setup.sampleType,options);
+    result.standalone.workflow=m.setup.workflow==='knockout'&&spec.guides.length>1?'deletion':m.setup.workflow;
+    result.standalone.decision=decide(m.setup.workflow==='knockout'&&spec.guides.length>1?'deletion':m.setup.workflow,result.standalone);
+    result.standalone.inputs={controls:[{file:m.control.name,sha256:result.controlHash}],edited:[{file:m.sample.name,sha256:result.sampleHash}]};
     if(m.figure){try{result.figure=chromatogramFigure({name:m.sample.name,controlTrace:control,editedTrace:edited,spec,sampleType:m.setup.sampleType,workflow:m.setup.workflow,options}).svg;}catch(e){result.figureError=e.message;}}
     self.postMessage(result);
   }catch(e){self.postMessage({ok:false,error:e.message||String(e)});}

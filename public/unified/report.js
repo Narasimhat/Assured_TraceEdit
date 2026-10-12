@@ -1,3 +1,6 @@
+import {buildQcReportHtml} from './vendor/assured-qc/report.js';
+import {withRecommendations} from './vendor/assured-qc/recommend.js';
+import {runProteinFigure} from './vendor/assured-qc/proteinFigure.js';
 import {outcomeGraph} from './outcome-graph.js';
 import {koAssessment,koCard,simpleResult} from './knockout.js';
 import {hdrCard,estimatedHdr,desiredOutcome} from './hdr.js';
@@ -44,7 +47,15 @@ export function poolOverview(bundle){
  return '<h2>Analysis summary</h2><p>Read-level estimates; repeated reads are not independent biological replicates. Intended-base signals must not be interpreted as precise-edit allele frequencies.</p>'+bundle.results.map(r=>`<p><b>${esc(r.sample)}</b>: ${esc(interpretation(r))}</p>`).join('');
 }
 
+export function qcStandaloneResults(bundle){return withRecommendations(bundle.results.map(r=>r.aq?.standalone?{...r.aq.standalone,workflow:r.workflow==='knockout'&&bundle.setup.guides?.length>1?'deletion':r.workflow||bundle.setup.workflow}:{name:r.sample,ok:false,error:r.aq?.error||'Re-run with QC 0.4.0 to generate its native detailed report.',warnings:[]}));}
 export function engineReportHtml(bundle,engine){
+ if(engine==='aq' && bundle.results.some(r=>r.aq?.standalone)){
+ const results=qcStandaloneResults(bundle),workflow=bundle.setup.workflow==='knockout'&&bundle.setup.guides?.length>1?'deletion':bundle.setup.workflow;
+ const native=buildQcReportHtml({title:'Assured QC - '+bundle.setup.name,workflow,design:bundle.setup.gene||'',results,generatedAt:new Date(bundle.created||Date.now()),notes:['Generated with the standalone Assured QC report template from the combined run. The fit settings and inputs of that run are retained.']});
+ const priorities=results.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.recommendation?.rank??'—')}</td><td>${esc(r.recommendation?.score??'—')}</td><td>${esc(r.recommendation?.action||r.error||'No recommendation')}</td></tr>`).join('');
+ return native.replace('<h2>Samples</h2>',`<h2>Validation priority</h2><p>QC support is an ordinal, provisional ranking score, not a probability of knockout.</p><table><tr><th>Sample</th><th>Rank</th><th>Support</th><th>Next step</th></tr>${priorities}</table>${runProteinFigure(results)||''}<h2>Samples</h2>`);
+ }
+
  const name=engine==='aq'?'AssuredQC':'TraceEdit';
  const sections=bundle.results.map(r=>{const a=engine==='aq',v=a?r.aq:r.te;
  if(!v || v.error || (a?!v.ok:!v.metrics))return `<section><h2>${esc(r.sample)}</h2><p>Analysis failed: ${esc(v?.error||'No result')}</p></section>`;
@@ -68,7 +79,7 @@ export function nativeTraceEditRequest(bundle){
 }
 
 export function compactOverview(bundle){
- const rows=bundle.results.map(r=>{const k=r.workflow==='knockout'?koAssessment(r,r.sampleType||bundle.setup.sampleType):null;return `<tr><td>${esc(r.sample)}</td><td>${esc(k?simpleResult(r,r.sampleType||bundle.setup.sampleType).status:compare(r).label)}</td><td>${k?percent(simpleResult(r,r.sampleType||bundle.setup.sampleType).editing):esc(signalRange(r,'aq')+' / '+signalRange(r,'te'))}</td></tr>`;}).join('');
+ const rows=bundle.results.map(r=>{const k=r.workflow==='knockout'?koAssessment(r,r.sampleType||bundle.setup.sampleType):null;return `<tr><td>${esc(r.sample)}</td><td>${esc(k?simpleResult(r,r.sampleType||bundle.setup.sampleType).status:compare(r).label)}</td><td>${k?esc((Number.isFinite(r.aq?.summary?.indelPct)?r.aq.summary.indelPct.toFixed(1)+'%':'�')+' / '+percent(r.te?.metrics?.indel_fraction)):esc(signalRange(r,'aq')+' / '+signalRange(r,'te'))}</td></tr>`;}).join('');
  const n=bundle.results.filter(r=>r.workflow==='knockout'&&koAssessment(r,r.sampleType||bundle.setup.sampleType).priority==='Prioritize for Western blot').length;
- return `<div class="report-summary" ${bundle.results.some(r=>r.workflow==='knockout')?'hidden':''}><b>${n?n+' candidates for Western blot':bundle.results.length+' reads analyzed'}</b><p>Screening predictions · validation required.</p></div>${bundle.results.some(r=>r.workflow==='knockout')?outcomeGraph(bundle.results,bundle.setup.sampleType):''}<details><summary>Sample values</summary><table><tr><th>Sample</th><th>Recommendation</th><th>Editing % (TraceEdit) / target signal</th></tr>${rows}</table></details>`;
+ return `<div class="report-summary" ${bundle.results.some(r=>r.workflow==='knockout')?'hidden':''}><b>${n?n+' candidates for Western blot':bundle.results.length+' reads analyzed'}</b><p>Screening predictions · validation required.</p></div>${bundle.results.some(r=>r.workflow==='knockout')?outcomeGraph(bundle.results,bundle.setup.sampleType):''}<details><summary>Sample values</summary><table><tr><th>Sample</th><th>Recommendation</th><th>Indels % (QC / TraceEdit) / target signal</th></tr>${rows}</table></details>`;
 }
