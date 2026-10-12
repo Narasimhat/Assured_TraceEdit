@@ -1,3 +1,4 @@
+import {referenceFromFile} from './reference.js';
 import {koAssessment,koCard} from './knockout.js';
 import {hdrCard,estimatedHdr,desiredOutcome} from './hdr.js';
 import {indelChart} from './charts.js';
@@ -17,7 +18,7 @@ function show(id){document.body.dataset.step=id;document.querySelectorAll('.step
 function lock(value){busy=value;document.querySelectorAll('button,input,select,textarea').forEach(n=>n.disabled=value);$('stop').disabled=!value;syncRun();}
 function syncRun(){$('run').disabled=busy||!plans.size||!$('confirmed').checked;}
 function invalidate(){plans.clear();$('confirmed').checked=false;$('plans').replaceChildren();$('review-summary').textContent='Setup changed. Return to Reads and choose Review setup before running.';syncRun();if(bundle){bundle.stale=true;$('results-note').textContent='Previous run: setup or files have changed. Export these results or review and run the new setup.';}}
-function setup(){return {name:$('name').value.trim(),gene:$('gene').value.trim(),cell:$('cell').value.trim(),primer:$('primer').value.trim(),transcript:$('ko-transcript').value.trim(),workflow:$('workflow').value,sampleType:$('sampleType').value,guides:$('guides').value.toUpperCase().split(/[\s,;]+/).filter(Boolean),donors:$('donor').value.split(/\n\s*\n/).map(dna).filter(Boolean),source};}
+function setup(){return {name:$('name').value.trim(),gene:$('gene').value.trim(),cell:$('cell').value.trim(),primer:$('primer').value.trim(),transcript:$('ko-transcript').value.trim(),workflow:$('workflow').value,sampleType:$('sampleType').value,guides:$('guides').value.toUpperCase().split(/[\s,;]+/).filter(Boolean),reference:codingReference?{filename:codingReference.filename,sha256:codingReference.sha256,source:codingReference.source}:null,donors:$('donor').value.split(/\n\s*\n/).map(dna).filter(Boolean),source};}
 function values(){return Object.fromEntries(fields.map(k=>[k,$(k).value]));}
 function saved(){try{const s=JSON.parse(localStorage.getItem(storeKey)||'[]');return Array.isArray(s)?s:[];}catch{return [];}}
 function savedList(){const previous=$('saved').value;$('saved').replaceChildren(new Option('Choose a saved setup…',''));saved().forEach(r=>$('saved').append(new Option(r.values.name,r.id)));$('saved').value=previous;}
@@ -35,16 +36,25 @@ async function api(path,form){const abort=new AbortController(),timer=setTimeout
 async function resolveCodingReference(chosen){
  const revision=++referenceRequest;codingReference=null;const filename=source?.annotations?.reference;
  $('ko-reference-choice').hidden=true;
- if(!filename){$('ko-reference-status').textContent='No unique GenBank reference filename found in this design. Coding-aware KO prediction is unavailable; the frameshift proxy remains visible.';return;}
+ if(!filename){$('ko-reference-panel').open=true;$('ko-reference-status').textContent='No unique GenBank reference filename found in this design. Select an annotated GenBank file below to enable KO prediction.';return;}
  $('ko-reference-status').textContent=`Resolving ${filename} from the local catalog…`;
  try{const response=await fetch('/api/reference/resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename,sha256:chosen})});
- let data;try{data=await response.json();}catch{throw Error('The online app cannot read your local reference catalog. Open the local app to resolve this design reference.');}
+ let data;try{data=await response.json();}catch{throw Error('The online app cannot read your local reference catalog. Select the design’s GenBank file below to enable KO prediction online.');}
  if(revision!==referenceRequest)return;
  if(data.candidates){const select=$('ko-reference-choice');select.replaceChildren(new Option('Choose a reference fingerprint…',''));data.candidates.forEach(c=>select.append(new Option(c.filename+' · '+c.sha256.slice(0,12)+' · '+c.projects.join(', '),c.sha256)));select.hidden=false;throw Error(data.error);}
  if(!response.ok)throw Error(data.error||'Reference unavailable');codingReference=data;
  $('ko-reference-status').textContent=`Reference ready: ${filename} · SHA-256 ${data.sha256.slice(0,12)}. Coding context will be checked against each control read.`;
- }catch(e){if(revision===referenceRequest)$('ko-reference-status').textContent=e.message;}
+ }catch(e){if(revision===referenceRequest){$('ko-reference-status').textContent=e.message;$('ko-reference-panel').open=true;}}
 }
+$('ko-reference-button').onclick=()=>$('ko-reference-file').click();
+$('ko-reference-file').onchange=handle(async()=>{
+ const file=$('ko-reference-file').files[0];if(!file)return;
+ const revision=++referenceRequest;codingReference=null;invalidate();
+ $('ko-reference-status').textContent='Checking reference…';
+ try{const selected=await referenceFromFile(file,source?.annotations?.reference,hash);if(revision!==referenceRequest)return;codingReference=selected;$('ko-reference-choice').hidden=true;$('ko-reference-status').textContent=`Reference ready: ${selected.filename} · ${selected.sha256.slice(0,12)}. CDS and control alignment are checked during analysis.`;say('Reference ready. Review setup and run to update KO predictions.');}
+ catch(e){if(revision===referenceRequest)$('ko-reference-status').textContent=e.message;throw e;}
+ finally{$('ko-reference-file').value='';}
+});
 $('ko-reference-choice').onchange=handle(async()=>{invalidate();await resolveCodingReference($('ko-reference-choice').value);});
 const selectedImport=()=>imports.find(r=>r.id===$('import-choice').value);
 function importOptions(){const q=$('import-search').value.toLowerCase();const records=imports.filter(r=>r.title.toLowerCase().includes(q));$('import-choice').replaceChildren(...records.map(r=>new Option(r.title,r.id)));renderImport();}
