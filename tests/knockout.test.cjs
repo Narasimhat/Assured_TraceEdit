@@ -25,3 +25,10 @@ test('WB priority requires coding evidence, matching sources, quality and engine
  row.knockoutPrediction.control_sha256='different';assert.equal(koAssessment(row).value,null);
  delete row.knockoutPrediction;assert.equal(koAssessment(row).value,null);
 });
+test('coding context information does not block triage but actual quality warnings do',async()=>{
+ const {koAssessment,simpleResult,koCard}=await import('../public/unified/knockout.js');
+ const row={knockoutPrediction:{value:.99,coding_truncating:0,splice_disruptive:.99,nmd_susceptible:0,in_frame:0,unresolved:0,control_sha256:'c'},aq:{ok:true,controlHash:'c',sampleHash:'s',r2:.99,contributions:[{size:-79,fraction:1}],warnings:['Coding context: CDS1, 317 residues.']},te:{source_hashes:{control:'c',sample:'s'},metrics:{r_squared:.99,indel_fraction:1},alignment:{baseline_mae:.01,sample_q20_fraction:.99},inference:{control_q20_fraction:.99},outcomes:[{net_bp:-79,fraction:1}],warnings:[]}};
+ assert.equal(simpleResult(row).status,'Test by Western blot');assert.equal(simpleResult(row).deletion,'-79 bp');assert.equal(koAssessment(row).value,.99);
+ const dom=new JSDOM(koCard(row));dom.window.document.querySelectorAll('details').forEach(n=>n.remove());assert.ok(!dom.window.document.body.textContent.includes('99.0%'));assert.match(dom.window.document.body.textContent,/100.0%/);dom.window.close();
+ row.aq.warnings.push('The edited trace has low quality scores');assert.equal(simpleResult(row).status,'Review trace');row.te={error:'alignment failed'};assert.equal(simpleResult(row).status,'Resequence');
+});

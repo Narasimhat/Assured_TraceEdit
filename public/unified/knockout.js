@@ -15,7 +15,7 @@ export function koAssessment(row,sampleType='clone',evidence='dual'){
  const aqProxy=(a?.contributions||[]).filter(c=>Number.isFinite(c.size)&&c.size%3!==0).reduce((n,c)=>n+c.fraction,0);
  const teProxy=(t?.outcomes||[]).filter(c=>Number.isFinite(c.net_bp)&&c.net_bp%3!==0).reduce((n,c)=>n+c.fraction,0);
  const consistent=evidence==='traceedit'||Math.abs(aqProxy-teProxy)<=.15;
- const warning=[...(a?.warnings||[]),...(t?.warnings||[]),...(t?.display_errors||[])].some(w=>!/Two-guide model includes/i.test(w));
+ const warning=[...(a?.warnings||[]),...(t?.warnings||[]),...(t?.display_errors||[])].some(w=>!/^(Two-guide model includes|Coding context:)/i.test(w));
  if(!good)result.reasons.push('Input identity, fit or trace-quality checks require review.');
  if(!consistent)result.reasons.push('Engines disagree on out-of-frame contributions by more than 15 percentage points.');
  if(warning)result.reasons.push('Engine warnings require inspection before prioritization.');
@@ -27,9 +27,24 @@ export function koAssessment(row,sampleType='clone',evidence='dual'){
  return result;
 }
 
-export function koCard(row,sampleType='clone',evidence='dual'){
+function detailedKoCard(row,sampleType='clone',evidence='dual'){
  const a=koAssessment(row,row.sampleType||sampleType,evidence),p=row.knockoutPrediction;
  const mechanism=(a.value===null?'Coding prediction unavailable':p.splice_disruptive>p.coding_truncating?'Predicted splice-site disruption':'Predicted coding disruption')+(evidence==='traceedit'?' · TraceEdit only':'');
  const segments=[['Coding',p?.coding_truncating,'#285d50'],['Splice',p?.splice_disruptive,'#629f91'],['Unresolved',p?.unresolved,'#dbb87a']];
  return `<section class="goal-card compact-ko"><div class="heading"><div><small>Possible KO contribution</small><strong>${a.value===null?'—':percent(a.value)}</strong></div><div><b>${esc(a.priority)}</b><p>${mechanism}</p></div></div>${a.value===null?'':`<div class="effect-bar" role="img" aria-label="${esc(segments.map(([n,v])=>n+' '+percent(v)).join(', '))}">${segments.map(([n,v,c])=>`<span style="width:${Math.max(0,Math.min(100,(v||0)*100))}%;background:${c}" title="${n}: ${percent(v)}"></span>`).join('')}</div><div class="effect-key">${segments.map(([n,v])=>`<span>${n} ${percent(v)}</span>`).join('')}</div>`}<small>Fitted contribution, not KO probability · validate by Western blot.</small><details><summary>Evidence & limitations</summary><ul>${a.reasons.map(r=>`<li>${esc(r)}</li>`).join('')}</ul><p>${esc(p?.reference||'No reference')} · ${esc(p?.transcript?.join(', ')||'')} · ${esc(p?.reference_sha256?.slice(0,12)||'')}</p><p>${esc(p?.limitations||'A reliable coding consequence has not been established.')}</p><details><summary>Predicted coding changes and NMD</summary><pre>${esc(JSON.stringify(p?.outcomes||[],null,2))}</pre></details></details></section>`;
+}
+
+// Presentation only: retain engine estimates and use the existing validation triage.
+export function simpleResult(row,sampleType='clone',evidence='dual'){
+ const a=koAssessment(row,row.sampleType||sampleType,evidence),t=row.te;
+ const editing=Number.isFinite(t?.metrics?.indel_fraction)?t.metrics.indel_fraction:null;
+ const sizes=new Map();for(const o of t?.outcomes||[])if(Number.isFinite(o.net_bp)&&Number.isFinite(o.fraction)&&o.net_bp!==0)sizes.set(o.net_bp,(sizes.get(o.net_bp)||0)+o.fraction);
+ const main=[...sizes].filter(([,v])=>v>=.2).sort((a,b)=>b[1]-a[1]).slice(0,2);
+ const deletion=main.length?main.map(([n])=>`${n>0?'+':''}${n} bp`).join(' / '):editing===0?'No edit detected':'Unresolved';
+ const status=editing===null?'Resequence':a.value===null?'Review reference':a.priority==='Prioritize for Western blot'?'Test by Western blot':a.priority.startsWith('Pool only')?'Pool only':'Review trace';
+ return {editing,deletion,status,assessment:a};
+}
+export function koCard(row,sampleType='clone',evidence='dual'){
+ const s=simpleResult(row,sampleType,evidence);
+ return `<section class="goal-card compact-ko"><div class="heading"><div><small>Editing (TraceEdit)</small><strong>${s.editing===null?'Unavailable':percent(s.editing)}</strong></div><div><b>${esc(s.deletion)}</b><p>${esc(s.status)}</p></div></div><small>Editing estimate, not confirmed protein knockout.</small><details><summary>Coding prediction &amp; evidence</summary>${detailedKoCard(row,sampleType,evidence)}</details></section>`;
 }

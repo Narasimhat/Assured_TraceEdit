@@ -1,5 +1,5 @@
 import {outcomeGraph} from './outcome-graph.js';
-import {koAssessment,koCard} from './knockout.js';
+import {koAssessment,koCard,simpleResult} from './knockout.js';
 import {hdrCard,estimatedHdr,desiredOutcome} from './hdr.js';
 import {indelChart} from './charts.js';
 import {escapeHtml as esc,percent,variantKey,compare,csv,targetsOf} from './core.js';
@@ -68,7 +68,7 @@ export function nativeTraceEditRequest(bundle){
 }
 
 export function compactOverview(bundle){
- const rows=bundle.results.map(r=>{const k=r.workflow==='knockout'?koAssessment(r,r.sampleType||bundle.setup.sampleType):null;return `<tr><td>${esc(r.sample)}</td><td>${esc(k?k.priority:compare(r).label)}</td><td>${k?percent(k.value):esc(signalRange(r,'aq')+' / '+signalRange(r,'te'))}</td></tr>`;}).join('');
+ const rows=bundle.results.map(r=>{const k=r.workflow==='knockout'?koAssessment(r,r.sampleType||bundle.setup.sampleType):null;return `<tr><td>${esc(r.sample)}</td><td>${esc(k?simpleResult(r,r.sampleType||bundle.setup.sampleType).status:compare(r).label)}</td><td>${k?percent(simpleResult(r,r.sampleType||bundle.setup.sampleType).editing):esc(signalRange(r,'aq')+' / '+signalRange(r,'te'))}</td></tr>`;}).join('');
  const n=bundle.results.filter(r=>r.workflow==='knockout'&&koAssessment(r,r.sampleType||bundle.setup.sampleType).priority==='Prioritize for Western blot').length;
- return `<div class="report-summary" ${bundle.results.some(r=>r.workflow==='knockout')?'hidden':''}><b>${n?n+' candidates for Western blot':bundle.results.length+' reads analyzed'}</b><p>Screening predictions · validation required.</p></div>${bundle.results.some(r=>r.workflow==='knockout')?outcomeGraph(bundle.results,bundle.setup.sampleType):''}<details><summary>Sample values</summary><table><tr><th>Sample</th><th>Recommendation</th><th>KO contribution / target signal</th></tr>${rows}</table></details>`;
+ return `<div class="report-summary" ${bundle.results.some(r=>r.workflow==='knockout')?'hidden':''}><b>${n?n+' candidates for Western blot':bundle.results.length+' reads analyzed'}</b><p>Screening predictions · validation required.</p></div>${bundle.results.some(r=>r.workflow==='knockout')?outcomeGraph(bundle.results,bundle.setup.sampleType):''}<details><summary>Sample values</summary><table><tr><th>Sample</th><th>Recommendation</th><th>Editing % (TraceEdit) / target signal</th></tr>${rows}</table></details>`;
 }
