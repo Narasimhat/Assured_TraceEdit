@@ -1,6 +1,6 @@
 # Assured Analysis
 
-Open https://assured-traceedit.vercel.app/unified.html. The existing TraceEdit interface remains at the root URL.
+Open https://assured-traceedit.vercel.app/unified.html. The root URL also opens this workspace. The standalone TraceEdit interface remains at `/index.html`. The header identifies Local/Online and the running build; Local projects opens the existing catalog without changing its files.
 
 1. Enter or save a project setup, or import an Assured HTML report and choose guides and one or both donors. HTML files stay in the browser. Saved setups contain selected design fields, not AB1 data.
 2. Add AB1 files repeatedly from different folders. Byte-identical duplicates are skipped; distinct files with identical names retain unique import numbers. Assign control, sample or ignored roles, and review each sample's matching control.

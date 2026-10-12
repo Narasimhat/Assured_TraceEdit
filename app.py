@@ -45,7 +45,7 @@ def invalid(error): return jsonify(error=str(error)),400
 def oversized(error): return jsonify(error='Request too large. Use files or a figure selection totaling less than 4 MB.'),413
 
 @app.get('/')
-def index(): return send_from_directory(HERE/'public','index.html')
+def index(): return send_from_directory(HERE/'public','unified.html')
 
 @app.get('/peaksplit/')
 def peaksplit_index(): return send_from_directory(HERE/'public'/'peaksplit','index.html')
@@ -53,8 +53,13 @@ def peaksplit_index(): return send_from_directory(HERE/'public'/'peaksplit','ind
 @app.get('/peaksplit/<path:filename>')
 def peaksplit_assets(filename): return send_from_directory(HERE/'public'/'peaksplit',filename)
 
+# Content identity is the same on local and hosted deployments (ignore Git line endings).
+_workspace_files=[HERE/'app.py',HERE/'engine.py',HERE/'public/unified.html',HERE/'public/workspace-version.js']+sorted((HERE/'public/unified').rglob('*.js'))+sorted((HERE/'public/unified').rglob('*.css'))
+WORKSPACE_BUILD=hashlib.sha256(b''.join(p.relative_to(HERE).as_posix().encode()+b'\0'+p.read_bytes().replace(b'\r\n',b'\n') for p in _workspace_files)).hexdigest()[:12]
+WORKSPACE_VERSION=re.search(r"VERSION = '([^']+)'",(HERE/'public/unified/core.js').read_text(encoding='utf-8')).group(1)
+
 @app.get('/api/health')
-def health(): return jsonify(status='ok',version='0.7.0',engine_sha256=hashlib.sha256((HERE/'engine.py').read_bytes()).hexdigest(),storage='hosted-stateless' if HOSTED else 'local-and-stateless')
+def health(): return jsonify(status='ok',version='0.7.0',engine_sha256=hashlib.sha256((HERE/'engine.py').read_bytes()).hexdigest(),storage='hosted-stateless' if HOSTED else 'local-and-stateless',workspace_version=WORKSPACE_VERSION,build=WORKSPACE_BUILD)
 
 def uploaded(role):
     file=request.files.get(role)

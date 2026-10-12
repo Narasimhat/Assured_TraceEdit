@@ -6,6 +6,8 @@ An independent Sanger sequencing analysis app for bulk samples and clone screeni
 
 The app supports local execution and stateless hosted analysis. Experimental inventories, traces, extracted workbooks, sample sheets and generated reports are excluded from Git and deployment uploads.
 
+The root URL now opens Assured Analysis. The standalone TraceEdit workspace remains at `/index.html`. The header shows Local/Online, workspace version and a content-based build identifier. Local deployments also show a Local projects link. Saved browser setups and experimental files are not migrated or synchronized between origins.
+
 ## Unified workflow
 
 The main workspace guides users through **Edit → Reads → Results**. Optional donors, advanced settings, raw cut-site traces and figure exports are collapsed. Peaksplit and supporting tools are available under More. The local project catalog and evidence-audit tools require a locally generated inventory; they are not included in the hosted app.

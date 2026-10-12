@@ -37,4 +37,7 @@ def test_health_and_frontend():
     client=app.test_client()
     assert client.get('/api/health').get_json()['storage']=='local-and-stateless'
     page=client.get('/').data
-    assert b'ASSURED' in page and b'id="analysis-form"' in page
+    assert b'ASSURED' in page and b'id="workspace-build"' in page
+    assert b'id="analysis-form"' in client.get('/index.html').data
+    health=client.get('/api/health').get_json()
+    assert health['workspace_version']=='1.2.0' and len(health['build'])==12
