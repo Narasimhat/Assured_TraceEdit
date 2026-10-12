@@ -53,10 +53,7 @@ def peaksplit_index(): return send_from_directory(HERE/'public'/'peaksplit','ind
 @app.get('/peaksplit/<path:filename>')
 def peaksplit_assets(filename): return send_from_directory(HERE/'public'/'peaksplit',filename)
 
-# Content identity is the same on local and hosted deployments (ignore Git line endings).
-_workspace_files=[HERE/'app.py',HERE/'engine.py',HERE/'public/unified.html',HERE/'public/workspace-version.js']+sorted((HERE/'public/unified').rglob('*.js'))+sorted((HERE/'public/unified').rglob('*.css'))
-WORKSPACE_BUILD=hashlib.sha256(b''.join(p.relative_to(HERE).as_posix().encode()+b'\0'+p.read_bytes().replace(b'\r\n',b'\n') for p in _workspace_files)).hexdigest()[:12]
-WORKSPACE_VERSION=re.search(r"VERSION = '([^']+)'",(HERE/'public/unified/core.js').read_text(encoding='utf-8')).group(1)
+from workspace_build import WORKSPACE_VERSION, WORKSPACE_BUILD
 
 @app.get('/api/health')
 def health(): return jsonify(status='ok',version='0.7.0',engine_sha256=hashlib.sha256((HERE/'engine.py').read_bytes()).hexdigest(),storage='hosted-stateless' if HOSTED else 'local-and-stateless',workspace_version=WORKSPACE_VERSION,build=WORKSPACE_BUILD)
