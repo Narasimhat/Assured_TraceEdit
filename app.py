@@ -12,6 +12,7 @@ from pathlib import Path
 os.environ.setdefault('MPLCONFIGDIR', str(Path(tempfile.gettempdir())/'traceedit-mpl'))
 os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
 from flask import Flask, jsonify, request, send_file, send_from_directory
+from werkzeug.exceptions import BadRequest, UnsupportedMediaType
 import numpy as np
 from engine import read_ab1, analyze, donor_variants
 from edit_annotations import select_centers, target_from_settings
@@ -46,6 +47,11 @@ def invalid(error): return jsonify(error=str(error)),400
 @app.errorhandler(413)
 def oversized(error): return jsonify(error='Request too large. Use files or a figure selection totaling less than 4 MB.'),413
 
+@app.errorhandler(BadRequest)
+@app.errorhandler(UnsupportedMediaType)
+def invalid_request(error):
+    return jsonify(error='Invalid request body. Send valid JSON for JSON endpoints.'),error.code
+
 @app.get('/')
 def index(): return send_from_directory(HERE/'public','unified.html')
 
@@ -55,6 +61,10 @@ def knockout_prediction():
     control=uploaded('control')
     try: result=json.loads(request.form.get('result','{}'))
     except Exception: raise ValueError('Invalid outcome data.')
+    if not isinstance(result,dict) or not isinstance(result.get('source_hashes',{}),dict):
+        raise ValueError('Invalid outcome data.')
+    if not isinstance(result.get('outcomes',[]),list) or any(not isinstance(o,dict) for o in result.get('outcomes',[])):
+        raise ValueError('Invalid outcome data.')
     if result.get('source_hashes',{}).get('control')!=control.sha256:raise ValueError('Prediction control does not match the fitted result.')
     if not result.get('metrics'):raise ValueError('A successful native fit is required.')
     return jsonify(predict(control,request.form.get('reference',''),result.get('outcomes',[]),request.form.get('transcript','')))
@@ -94,6 +104,10 @@ def settings():
     try: data=json.loads(request.form.get('settings','{}'))
     except Exception: raise ValueError('Invalid analysis settings.') from None
     if not isinstance(data,dict): raise ValueError('Settings must be an object.')
+    for key,default,low,high in (('max_deletion',20,1,40),('max_insertion',2,0,3),('window',120,60,250)):
+        value=data.get(key,default)
+        if type(value)!=int or not low<=value<=high:
+            raise ValueError(f'{key} must be an integer from {low} to {high}.')
     guides=data.get('guides',[]);cuts=data.get('cut_positions',[]);variants=data.get('variants',[])
     if not isinstance(guides,list) or len(guides)>2 or any(not isinstance(g,str) or len(g)>40 for g in guides): raise ValueError('Use one or two guide sequences.')
     if not isinstance(cuts,list) or len(cuts)>2 or any(type(c)!=int for c in cuts): raise ValueError('Use one or two integer cut positions.')
@@ -133,14 +147,24 @@ def run():
 def validate_bundle(body):
     """Bound client-held data before handing it to plotting and document libraries."""
     if not isinstance(body,dict): raise ValueError('Invalid export.')
-    bundle=body.get('bundle',{});results=bundle.get('results',[])
+    bundle=body.get('bundle',{})
+    if not isinstance(bundle,dict): raise ValueError('Export bundle must be an object.')
+    results=bundle.get('results',[])
     if not isinstance(results,list) or not 1<=len(results)<=384: raise ValueError('Export requires 1–384 results.')
     for r in results:
         if not isinstance(r,dict) or not isinstance(r.get('sample'),str) or len(r['sample'])>160: raise ValueError('Invalid sample name.')
         if r.get('status') not in ('failed','fit_pass','review_required'): raise ValueError('Invalid QC status.')
-        for d in r.get('displays',{}).values():
+        if not isinstance(r.get('source_hashes',{}),dict): raise ValueError('Invalid source hashes.')
+        displays=r.get('displays',{})
+        if not isinstance(displays,dict): raise ValueError('Invalid displays.')
+        for d in displays.values():
+            if not isinstance(d,dict): raise ValueError('Invalid display.')
             for role in ('control','sample'):
-                w=d[role];x=np.asarray(w['x'],dtype=float);y=np.asarray(w['y'],dtype=float)
+                w=d.get(role)
+                if not isinstance(w,dict) or not {'x','y','positions','calls','start','end'}<=w.keys(): raise ValueError('Invalid trace window.')
+                if not isinstance(w['positions'],list) or not isinstance(w['calls'],str) or any(type(w[k])!=int for k in ('start','end')): raise ValueError('Invalid trace window.')
+                try: x=np.asarray(w['x'],dtype=float);y=np.asarray(w['y'],dtype=float)
+                except (TypeError,ValueError,OverflowError): raise ValueError('Invalid display signal.') from None
                 if x.ndim!=1 or not 2<=len(x)<=10000 or y.shape!=(len(x),4) or not np.isfinite(x).all() or not np.isfinite(y).all() or np.max(np.abs(y))>2: raise ValueError('Invalid display signal.')
                 if len(w['positions'])>61 or len(w['calls'])!=len(w['positions']) or w['end']-w['start']>60: raise ValueError('Invalid trace window.')
     indices=body.get('indices',[]);centers=body.get('centers',[])
