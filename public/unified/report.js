@@ -23,9 +23,71 @@ export function traceSvg(display,selected){
  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1030 300" class="trace" role="img" aria-label="Control and sample chromatograms around control base ${Number(display.center)}">${body}</svg>`;
 }
 export function reportHtml(bundle){
- const rows=tableRows(bundle);const table='<table><thead><tr>'+rows[0].slice(0,10).map(v=>`<th>${esc(v)}</th>`).join('')+'</tr></thead><tbody>'+rows.slice(1).map(r=>'<tr>'+r.slice(0,10).map(v=>`<td>${esc(typeof v==='number'?v.toFixed(2):v)}</td>`).join('')+'</tr>').join('')+'</tbody></table>';
- const details=bundle.results.map(r=>{const review=compare(r);return `<section><h2>${esc(r.sample)}</h2><p>Control: ${esc(r.control)} · ${esc(review.label)}</p><details><summary>Quality checks</summary><ul>${review.reasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><p>AQ: ${esc(r.aq?.error||r.aq?.warnings?.join('; ')||'No engine warnings')}<br>TE: ${esc(r.te?.error||r.te?.warnings?.join('; ')||'No engine warnings')}</p></details>${r.workflow==='knockout'?koCard(r,r.sampleType||bundle.setup.sampleType):snpCard(r,r.sampleType||bundle.setup.sampleType)}<details><summary>Indel distributions & engine scores</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px"><div><b>AssuredQC</b>${hdrCard(r,'aq')}${indelChart(r.aq,'aq',r)}</div><div><b>TraceEdit</b>${hdrCard(r,'te')}${indelChart(r.te,'te',r)}</div></div></details><details><summary>Interpretation and per-base evidence</summary><p>${esc(interpretation(r))}</p>${variantTable(r)}</details>${Object.values(r.te?.displays||{}).map(d=>traceSvg(d,targetsOf(r))).join('')}<details><summary>Engine settings, fit windows and source hashes</summary><pre>${esc(JSON.stringify({aq:{options:r.aq?.options,window:r.aq?.window,controlHash:r.aq?.controlHash,sampleHash:r.aq?.sampleHash},te:{parameters:r.te?.parameters,inference:r.te?.inference,source_hashes:r.te?.source_hashes}},null,2))}</pre></details></section>`;}).join('');
- return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assured Analysis report</title><style>.hdr-card{display:flex;gap:24px;margin:12px 0}.hdr-card strong,.hdr-card small{display:block}.hdr-card strong{font-size:24px}body{font:15px/1.6 Segoe UI,Arial,sans-serif;max-width:1080px;margin:36px auto;padding:28px;color:#173d30;background:#f8faf8}h1{font-weight:650;letter-spacing:-1px}section{background:white;padding:24px;border-radius:16px}details{padding:8px 0}table{border-collapse:collapse;width:100%;font-size:11px}td,th{padding:8px;border:1px solid #d5ddcf;text-align:left}th{background:#eef3e7}section{margin-top:36px;break-inside:avoid}svg{width:100%;max-width:1050px}pre{white-space:pre-wrap;overflow-wrap:anywhere}h1{font-size:32px}.goal-card{background:#edf5f0;border-radius:10px;padding:18px;margin:16px 0}.heading{display:flex;align-items:center;justify-content:space-between;gap:20px}.heading strong{display:block;font-size:32px}.effect-bar{display:flex;height:12px;background:#e5e9e5;border-radius:8px;overflow:hidden;margin:14px 0 8px}.effect-key{display:flex;gap:20px;font-size:12px;margin-bottom:12px}details{margin:16px 0}summary{cursor:pointer;color:#526b61}.report-summary{background:#edf5f0;padding:20px;border-radius:10px}small{color:#526b61}@media print{body{margin:0}details{display:none}section{break-inside:auto}.goal-card{break-inside:avoid}}</style></head><body><p style="font-size:11px;letter-spacing:2px;color:#738b7e">ASSURED / ANALYSIS REPORT</p><h1>${esc(bundle.setup.name.replace(/^Design:\s*/,''))}</h1><p>${esc((bundle.created||'').slice(0,10))} · ${esc([bundle.setup.gene,bundle.setup.cell,bundle.setup.primer&&'Primer '+bundle.setup.primer,bundle.setup.sampleType].filter(Boolean).join(' · '))}</p><p>${esc(bundle.results.length)} of ${esc(bundle.planned)} reads processed${bundle.stopped?' (stopped early)':''}.</p><details><summary>How to interpret this report</summary><p>Same selected files; two distinct models. No averaged score. Target values are raw alternate-channel signals (ranges across selected bases), not calibrated allele fractions. Differences &gt;15 percentage points or fit R² &lt;0.85 trigger review. Agreement does not confirm genotype; indels can confound SNP signals. Review both raw outputs in the accompanying JSON.</p></details>${compactOverview(bundle)}<details><summary>Engine comparison table</summary>${table}</details>${details}<details><summary>Methods, setup & provenance</summary><p>Engine versions: ${esc(JSON.stringify(bundle.engines))}</p><pre>${esc(JSON.stringify(bundle.setup,null,2))}</pre></details><p>Green target band · A green, C blue, G dark, T red. TraceEdit continuous traces use a shared scale per window. AQ and TE corrected signals use different background corrections. All target coordinates refer to the paired control read.</p></body></html>`;
+ const take=takeHomeMessage(bundle);
+ const decisions=cloneDecisions(bundle);
+ const workflow=decisions.workflow;
+ const metricHead=workflow==='snp'?'Intended edit':'Editing score';
+ const picks=decisions.top.length
+  ?`<ol class="picks">${decisions.top.slice(0,8).map((r,i)=>`<li><b>${esc(r.label)}</b> · ${esc(r.metricText)} ${esc(metricHead.toLowerCase())} · ${esc(r.detail)}</li>`).join('')}</ol>`
+  :`<p class="muted">No provisional top picks. Use the ranked table to decide what to resequence or review.</p>`;
+ const rank=`<table class="rank"><thead><tr><th>#</th><th>Clone</th><th>Next step</th><th>${esc(metricHead)}</th><th>Main allele / target</th></tr></thead><tbody>${decisions.rows.map((r,i)=>`<tr class="${r.priority?'pick':''}"><td>${i+1}</td><td>${esc(r.label)}<div class="sub">${esc(r.sample)}</div></td><td><span class="badge ${r.priority?'good':'review'}">${esc(r.status)}</span></td><td>${esc(r.metricText)}</td><td>${esc(r.detail)}</td></tr>`).join('')}</tbody></table>`;
+ const rows=tableRows(bundle);
+ const comparison='<table><thead><tr>'+rows[0].slice(0,10).map(v=>`<th>${esc(v)}</th>`).join('')+'</tr></thead><tbody>'+rows.slice(1).map(r=>'<tr>'+r.slice(0,10).map(v=>`<td>${esc(typeof v==='number'?v.toFixed(2):v)}</td>`).join('')+'</tr>').join('')+'</tbody></table>';
+ const appendix=bundle.results.map(r=>{const review=compare(r);return `<section class="appendix-item"><h3>${esc(r.sample)}</h3><p>Control: ${esc(r.control)} · ${esc(review.label)}</p>${r.workflow==='knockout'?koCard(r,r.sampleType||bundle.setup.sampleType):snpCard(r,r.sampleType||bundle.setup.sampleType)}<details><summary>Quality checks</summary><ul>${review.reasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><p>AQ: ${esc(r.aq?.error||r.aq?.warnings?.join('; ')||'No engine warnings')}<br>TE: ${esc(r.te?.error||r.te?.warnings?.join('; ')||'No engine warnings')}</p></details><details><summary>Indel distributions & engine scores</summary><div class="engine-grid"><div><b>AssuredQC</b>${hdrCard(r,'aq')}${indelChart(r.aq,'aq',r)}</div><div><b>TraceEdit</b>${hdrCard(r,'te')}${indelChart(r.te,'te',r)}</div></div></details><details><summary>Interpretation and per-base evidence</summary><p>${esc(interpretation(r))}</p>${variantTable(r)}</details>${Object.values(r.te?.displays||{}).slice(0,1).map(d=>traceSvg(d,targetsOf(r))).join('')}</section>`;}).join('');
+ const css=`body{font:15px/1.55 "Segoe UI",Arial,sans-serif;max-width:920px;margin:28px auto;padding:24px;color:#173d30;background:#f7f9f5}
+.eyebrow{font-size:11px;letter-spacing:2px;color:#6f8578;font-weight:700;margin:0}
+h1{font-size:34px;letter-spacing:-1px;margin:10px 0 8px;font-weight:650}
+h2{font-size:20px;margin:28px 0 12px}
+h3{font-size:16px;margin:0 0 8px}
+.meta,.muted{color:#5f7468;font-size:13px}
+.takehome{background:linear-gradient(135deg,#e7f4ed,#f4faf6);border:1px solid #b9d7c8;border-radius:14px;padding:22px 24px;margin:22px 0}
+.takehome strong{display:block;font-size:22px;line-height:1.3;color:#174f3e;margin-bottom:8px}
+.picks{margin:10px 0 0 18px;padding:0}
+.picks li{margin:6px 0}
+.rank{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0 8px}
+.rank th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#647968;background:#eef3e7;padding:10px}
+.rank td{padding:11px 10px;border-bottom:1px solid #e1e8dc;vertical-align:top}
+.rank tr.pick{background:#eef8f2}
+.rank .sub{font-size:11px;color:#7a8b83;margin-top:2px;overflow-wrap:anywhere}
+.badge{display:inline-block;padding:3px 8px;border-radius:4px;background:#edf2e7;font-size:12px}
+.badge.good{background:#dceee4;color:#215641}
+.badge.review{background:#fff0dc;color:#80561c}
+.figure{margin:18px 0;background:white;border:1px solid #dde5d7;border-radius:12px;padding:12px}
+.figure svg{width:100%;max-width:100%;height:auto}
+.note{font-size:12px;color:#617365;margin-top:18px}
+details.appendix{margin-top:28px;border-top:1px solid #d8e2d6;padding-top:16px}
+details.appendix>summary{cursor:pointer;font-weight:650;color:#2f5648}
+.appendix-item{background:white;border:1px solid #e0e7da;border-radius:12px;padding:16px;margin:14px 0}
+.engine-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.goal-card{background:#edf5f0;border-radius:10px;padding:16px;margin:12px 0}
+.hdr-card{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+.hdr-card strong,.hdr-card small{display:block}
+.hdr-card strong{font-size:22px}
+.heading{display:flex;justify-content:space-between;gap:16px}
+.heading strong{display:block;font-size:28px}
+.effect-bar{display:flex;height:10px;background:#e5e9e5;border-radius:8px;overflow:hidden;margin:12px 0 6px}
+.effect-key{display:flex;gap:16px;font-size:12px;margin-bottom:10px}
+table{border-collapse:collapse;width:100%}
+td,th{padding:8px;border:1px solid #d5ddcf;text-align:left}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}
+@media(max-width:720px){.engine-grid,.hdr-card{grid-template-columns:1fr}h1{font-size:28px}}
+@media print{body{margin:0;background:white;max-width:none}.takehome{break-inside:avoid}.appendix{display:none!important}.figure{break-inside:avoid}}`;
+ return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assured Analysis · ${esc(bundle.setup.name.replace(/^Design:\s*/,''))}</title><style>${css}</style></head><body>
+<p class="eyebrow">ASSURED · CLONE SELECTION REPORT</p>
+<h1>${esc(bundle.setup.name.replace(/^Design:\s*/,''))}</h1>
+<p class="meta">${esc((bundle.created||'').slice(0,10))} · ${esc([bundle.setup.gene,bundle.setup.cell,bundle.setup.primer&&'Primer '+bundle.setup.primer,bundle.setup.sampleType,`${bundle.results.length}/${bundle.planned} reads`].filter(Boolean).join(' · '))}${bundle.stopped?' · stopped early':''}</p>
+<section class="takehome"><strong>Take home: ${esc(take.headline)}</strong><p>${esc(take.body)}</p>${picks}</section>
+<h2>Ranked clones</h2>
+${rank}
+<div class="figure">${outcomeGraph(bundle.results,bundle.setup.sampleType,false,false,workflow)}</div>
+<p class="note">Provisional dual-engine screen (AssuredQC + TraceEdit). Scores are fitted contributions, not confirmed genotypes or allele frequencies. Differences &gt;15 percentage points or fit R² &lt;0.85 require review. Validate top picks independently before banking clones.</p>
+<details class="appendix"><summary>Appendix · methods, comparison table and per-sample evidence</summary>
+<details><summary>How to interpret</summary><p>Same selected files; two distinct models. No averaged score. Target values are raw alternate-channel signals, not calibrated allele fractions. Agreement does not confirm genotype; indels can confound SNP signals. Multisite co-occurrence is model-dependent.</p></details>
+<details><summary>Engine comparison table</summary>${comparison}</details>
+${appendix}
+<details><summary>Methods, setup & provenance</summary><p>Engine versions: ${esc(JSON.stringify(bundle.engines))}</p><pre>${esc(JSON.stringify(bundle.setup,null,2))}</pre></details>
+</details>
+</body></html>`;
 }
 
 export function signalRange(r,engine,corrected=false){
@@ -78,15 +140,54 @@ export function nativeTraceEditRequest(bundle){
  return {bundle:{id:`unified-${bundle.created}`,created_utc:bundle.created,settings:{...bundle.setup,flank:18},results},indices,centers,title:('TraceEdit · '+bundle.setup.name).slice(0,75),flank:18,format:'report'};
 }
 
+function shortLabel(sample){
+ const base=String(sample||'').replace(/\.ab1.*$/i,'');
+ const clone=base.match(/^cl(\d+)/i);
+ return clone?'Clone '+clone[1]:base.split(/[_.]/)[0]||base;
+}
+function decisionOf(r,sampleType,workflow){
+ if(workflow==='knockout'){
+  const simple=simpleResult(r,sampleType);
+  const scores=modelScores(r);
+  const metric=Number.isFinite(scores.te.ko)?scores.te.ko:Number.isFinite(scores.te.indel)?scores.te.indel:null;
+  const priority=koAssessment(r,sampleType).priority==='Prioritize for Western blot';
+  return {label:shortLabel(r.sample),sample:r.sample,status:simple.status==='Test by Western blot'?'Validate by Western blot':simple.status,metric,metricText:Number.isFinite(metric)?percent(metric):'—',detail:simple.deletion,priority,tier:priority?0:simple.status==='Resequence'?3:simple.status==='Pool only'?2:1};
+ }
+ const s=snpResult(r,sampleType);
+ const metric=Number.isFinite(s.edit)?s.edit:null;
+ return {label:shortLabel(r.sample),sample:r.sample,status:s.status,metric,metricText:Number.isFinite(metric)?percent(metric):'—',detail:s.label,priority:s.status==='Prioritize for confirmation',tier:s.status==='Prioritize for confirmation'?0:s.status==='Resequence'||s.status==='Input mismatch'?3:s.status==='Pool only'?2:1};
+}
+export function cloneDecisions(bundle){
+ const workflow=bundle.setup.workflow||bundle.results[0]?.workflow||'knockout';
+ const sampleType=bundle.setup.sampleType||'clone';
+ const rows=bundle.results.map(r=>decisionOf(r,r.sampleType||sampleType,r.workflow||workflow));
+ rows.sort((a,b)=>a.tier-b.tier||(b.metric??-1)-(a.metric??-1)||a.sample.localeCompare(b.sample));
+ return {workflow,sampleType,rows,top:rows.filter(r=>r.priority)};
+}
+export function takeHomeMessage(bundle){
+ const {workflow,sampleType,rows,top}=cloneDecisions(bundle);
+ if(sampleType==='pool'||rows.every(r=>r.status==='Pool only')){
+  return {headline:'Pool screen — do not pick clones from these estimates.',body:'Use these reads to judge editing activity in the bulk population, then sequence individual clones before validation.'};
+ }
+ if(!rows.length)return {headline:'No reads analysed.',body:'Re-run after adding control/sample pairs.'};
+ if(top.length){
+  const names=top.slice(0,5).map(r=>r.label);
+  const more=top.length>5?` (+${top.length-5} more)`:'';
+  return {headline:workflow==='snp'
+   ?`Advance ${names.join(', ')}${more} for confirmation sequencing.`
+   :`Advance ${names.join(', ')}${more} for Western blot validation.`,
+   body:workflow==='snp'
+   ?'These clones met provisional dual-engine intended-edit and quality thresholds. Confirm genotype independently before banking.'
+   :'These clones met provisional dual-engine editing and coding-screen thresholds. Protein knockout still requires Western blot or equivalent validation.'};
+ }
+ const review=rows.filter(r=>r.tier===1).slice(0,4).map(r=>r.label);
+ const bad=rows.filter(r=>r.tier===3).slice(0,3).map(r=>r.label);
+ return {headline:'No clone met the provisional top-pick thresholds.',body:(review.length?`Review first: ${review.join(', ')}. `:'')+(bad.length?`Resequence or replace: ${bad.join(', ')}. `:'')+'Inspect traces before discarding borderline candidates.'};
+}
 export function compactOverview(bundle){
  const workflow=bundle.setup.workflow||(bundle.results[0]?.workflow)||'knockout';
- const rows=bundle.results.map(r=>{
-  const ko=r.workflow==='knockout';
-  const status=ko?simpleResult(r,r.sampleType||bundle.setup.sampleType).status:snpResult(r,r.sampleType||bundle.setup.sampleType).status;
-  const metric=ko?((Number.isFinite(r.aq?.summary?.indelPct)?r.aq.summary.indelPct.toFixed(1)+'%':'-')+' / '+percent(r.te?.metrics?.indel_fraction)):((desiredOutcome(r,'aq').value===null?'—':percent(desiredOutcome(r,'aq').value))+' / '+(desiredOutcome(r,'te').value===null?'—':percent(desiredOutcome(r,'te').value)));
-  return `<tr><td>${esc(r.sample)}</td><td>${esc(status)}</td><td>${esc(metric)}</td></tr>`;
- }).join('');
- const n=bundle.results.filter(r=>r.workflow==='knockout'?koAssessment(r,r.sampleType||bundle.setup.sampleType).priority==='Prioritize for Western blot':snpResult(r,r.sampleType||bundle.setup.sampleType).status==='Prioritize for confirmation').length;
- const title=workflow==='snp'?(n?n+' candidates to confirm':bundle.results.length+' reads analyzed'):(n?n+' candidates for Western blot':bundle.results.length+' reads analyzed');
- return `<div class="report-summary"><b>${esc(title)}</b><p>Screening predictions · validation required.</p></div>${outcomeGraph(bundle.results,bundle.setup.sampleType,false,false,workflow)}<details open><summary>Sample values</summary><table><tr><th>Sample</th><th>Recommendation</th><th>${workflow==='snp'?'Intended edit % (QC / TraceEdit)':'Indels % (QC / TraceEdit)'}</th></tr>${rows}</table></details>`;
+ const {rows,top}=cloneDecisions(bundle);
+ const table=rows.map(r=>`<tr class="${r.priority?'pick':''}"><td>${esc(r.label)}</td><td>${esc(r.status)}</td><td>${esc(r.metricText)}</td><td>${esc(r.detail)}</td></tr>`).join('');
+ const title=workflow==='snp'?(top.length?top.length+' top clones to confirm':bundle.results.length+' reads analyzed'):(top.length?top.length+' top clones for Western blot':bundle.results.length+' reads analyzed');
+ return `<div class="report-summary"><b>${esc(title)}</b><p>Screening shortlist · independent validation required.</p></div>${outcomeGraph(bundle.results,bundle.setup.sampleType,false,false,workflow)}<table class="rank"><tr><th>Clone</th><th>Next step</th><th>${workflow==='snp'?'Intended edit':'Editing / KO score'}</th><th>Note</th></tr>${table}</table>`;
 }

@@ -37,9 +37,15 @@ test('SNP overview graph mirrors dual-model layout and preserves interaction',as
 });
 
 test('combined report overview includes SNP graphs and decision cards',async()=>{
- const {compactOverview,reportHtml}=await import('../public/unified/report.js');
+ const {compactOverview,reportHtml,takeHomeMessage}=await import('../public/unified/report.js');
  const bundle={setup:{name:'PHF6 S199E',workflow:'snp',sampleType:'clone',gene:'PHF6'},results:[snpRow()],planned:1,created:'2026-01-01T00:00:00.000Z',engines:{assuredQC:'x',traceEdit:'y'}};
  assert.match(compactOverview(bundle),/INTENDED EDIT/);
- assert.match(compactOverview(bundle),/candidates to confirm/);
- assert.match(reportHtml(bundle),/Intended edit · QC \/ TraceEdit/);
+ assert.match(compactOverview(bundle),/top clones to confirm/);
+ const take=takeHomeMessage(bundle);
+ assert.match(take.headline,/Advance Clone 3/);
+ const html=reportHtml(bundle);
+ assert.match(html,/Take home:/);
+ assert.match(html,/CLONE SELECTION REPORT/);
+ assert.match(html,/Intended edit · QC \/ TraceEdit/);
+ assert.match(html,/Appendix/);
 });
