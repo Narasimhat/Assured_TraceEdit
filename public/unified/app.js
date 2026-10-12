@@ -15,7 +15,7 @@ const storeKey='assured-analysis.setups.v1';
 const SAMPLE_LIMIT=384;
 let codingReference=null,referenceRequest=0;
 let files=[],imports=[],source=null,plans=new Map(),bundle=null,busy=false,stopping=false,serial=0,inspecting=null;
-const say=(text='')=>{$('message').textContent=text;};
+const say=(text='',kind='')=>{$('message').textContent=text;$('message').dataset.kind=kind||(text?'info':'');};
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
 const download=(content,name,type)=>{const u=URL.createObjectURL(new Blob([content],{type}));const a=el('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);};
 function show(id){
@@ -39,7 +39,7 @@ function setup(){return {name:$('name').value.trim(),gene:$('gene').value.trim()
 function values(){return Object.fromEntries(fields.map(k=>[k,$(k).value]));}
 function saved(){try{const s=JSON.parse(localStorage.getItem(storeKey)||'[]');return Array.isArray(s)?s:[];}catch{return [];}}
 function savedList(){const previous=$('saved').value;$('saved').replaceChildren(new Option('Choose a saved setup…',''));saved().forEach(r=>$('saved').append(new Option(r.values.name,r.id)));$('saved').value=previous;}
-const handle=fn=>async (...args)=>{try{await fn(...args);}catch(e){say(e.message||String(e));}};
+const handle=fn=>async (...args)=>{try{await fn(...args);}catch(e){say(e.message||String(e),'error');}};
 fields.forEach(k=>$(k).addEventListener('input',()=>{invalidate();if(k==='workflow')syncWorkflowUi();}));
 document.querySelectorAll('[data-step]').forEach(n=>n.onclick=()=>{if(busy&&n.dataset.step!=='results')return;show(n.dataset.step);});
 $('confirmed').onchange=syncRun;
@@ -119,10 +119,16 @@ $('prepare').onclick=handle(async()=>{validateSetup(setup());const jobs=pairs();
  for(const [id,p] of plans){const box=el('div');box.className='plan';box.append(el('h3',p.control),el('p',`Mapped cut boundaries after control bases ${p.spec.guides.map(g=>g.cut).join(', ')}. ${p.variants.length} donor substitutions.`));if(p.warnings.length)box.append(el('p',p.warnings.join(' ')));if(p.variants.length){const label=el('div');label.append(el('p',p.annotations.note));const all=el('button','Select all as intended');all.type='button';all.className='secondary';all.onclick=()=>{label.querySelectorAll('input').forEach(c=>{if(!c.checked){c.checked=true;c.onchange();}});};label.append(all);
  p.variants.forEach(v=>{const item=el('label',variantKey(v)+(p.annotations.blocking.some(b=>variantKey(b)===variantKey(v))?' · silent/blocking (HTML)':'')),check=el('input');check.type='checkbox';check.checked=p.targets.some(t=>variantKey(t)===variantKey(v));check.setAttribute('aria-label',`Intended ${variantKey(v)}`);check.onchange=()=>{p.targets=check.checked?[...p.targets,v]:p.targets.filter(t=>variantKey(t)!==variantKey(v));p.target=p.targets[0]||null;$('confirmed').checked=false;syncRun();};item.prepend(check);label.append(item);});
  box.append(label,el('p',`Both donor mappings agree: ${p.variants.map(variantKey).join(', ')}. Coordinates are 1-based in this control read.`));}const list=el('ul');jobs.filter(j=>j.control.id===id).forEach(j=>list.append(el('li',`${j.sample.label} → ${p.control}`)));box.append(list);$('plans').append(box);}
- say('Review the pairing list and select all intended changes for each control, then confirm.');
+ const snp=s.workflow==='snp',needTargets=[...plans.values()].some(p=>p.variants.length&&!p.targets.length);
+ say(snp
+  ?(needTargets
+   ?'Donor mapped. For each control: tick the intended nucleotide change(s) — or “Select all as intended” — then tick the confirmation box and Analyze.'
+   :'Donor mapped. Check the sample↔control pairing list, keep the intended changes selected, tick the confirmation box, then Analyze.')
+  :'Controls prepared. Check the sample↔control pairing list, tick the confirmation box, then Analyze.','ok');
+ $('confirmed').focus();
  }catch(e){plans.clear();throw e;}finally{lock(false);}});
 $('stop').onclick=()=>{stopping=true;$('stop').disabled=true;$('progress').textContent='Stopping after the current pair. Completed results will remain available.';};
-$('run').onclick=handle(async()=>{if(busy||!plans.size||!$('confirmed').checked)throw Error('Review the current setup and pairings first.');const s=setup();validateSetup(s);const jobs=pairs();if(s.workflow==='snp'&&[...plans.values()].some(p=>!p.target))throw Error('Choose the intended SNP for every control.');lock(true);stopping=false;inspecting=null;try{
+$('run').onclick=handle(async()=>{if(busy||!plans.size||!$('confirmed').checked)throw Error('Tick the confirmation checkbox after reviewing pairings (and intended SNP changes).');const s=setup();validateSetup(s);const jobs=pairs();if(s.workflow==='snp'&&[...plans.values()].some(p=>!p.target))throw Error('Choose at least one intended SNP for every control (use the checkboxes or “Select all as intended”).');lock(true);stopping=false;inspecting=null;try{
  const provenance=await (await fetch('/unified/vendor/assured-qc/provenance.json')).json();const health=await (await fetch('/api/health')).json();
  bundle={schema:'assured-analysis/1',workspaceVersion:VERSION,created:new Date().toISOString(),setup:structuredClone(s),engines:{assuredQC:provenance.commit,traceEdit:health.version,traceEditEngineSha256:health.engine_sha256},planned:jobs.length,reviewed:true,plans:[...plans.entries()].map(([id,p])=>({control:id,hash:p.hash,variants:p.variants,target:p.target,targets:p.targets,donorMapping:p.mapping})),results:[],stale:false,stopped:false};
  for(const [i,j] of jobs.entries()){if(stopping)break;const p=plans.get(j.control.id);const progress=`${i+1} / ${jobs.length}: ${j.sample.label} · running AssuredQC and TraceEdit`;$('progress').textContent=progress;$('results-progress').hidden=false;$('results-progress').textContent=progress;const settings={guides:s.guides,variants:p.variants,max_deletion:20,max_insertion:2,window:150,flank:18};if(p.target)settings.target_variant={...p.target,label:variantKey(p.target)};const form=new FormData();form.append('control',j.control.file);form.append('sample',j.sample.file);form.append('settings',JSON.stringify(settings));
