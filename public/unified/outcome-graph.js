@@ -19,23 +19,31 @@ function nativeOutcomeGraph(rows,sampleType='clone',native=false,interactive=fal
  body+=`<text x="28" y="${height-14}" font-size="12" fill="#7b8b83">Editing estimate, not confirmed knockout. Select a sample for traces and coding evidence.</text></g>`;
  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" style="display:block;width:100%;min-width:690px;height:auto" role="${interactive?'group':'img'}" aria-label="Editing results by sample">${body.replace(/font-size="([0-9]+)"/g,'style="font-size:$1px"')}</svg>`;
 }
+// ICE-style screening rule, applied to each engine's fitted contributions.
+// Keep coding/splicing assessments in the detailed report; these are not KO probabilities.
+export function traceEditKoScore(t){
+ if(t?.error || !t?.metrics || !Array.isArray(t.outcomes) || !t.outcomes.length)return null;
+ if(t.outcomes.some(o=>!Number.isInteger(o.net_bp)||!Number.isFinite(o.fraction)||o.fraction<0))return null;
+ const total=t.outcomes.reduce((n,o)=>n+o.fraction,0);
+ if(total>1.01)return null;
+ return Math.min(1,t.outcomes.filter(o=>o.net_bp%3!==0||Math.abs(o.net_bp)>=21).reduce((n,o)=>n+o.fraction,0));
+}
 export function modelScores(row){
- const a=row.aq,t=row.te,p=row.knockoutPrediction;
+ const a=row.aq,t=row.te;
  const aqOk=a?.ok&&!a.error,teOk=!!t?.metrics&&!t.error;
- const teCoding=teOk&&!!p?.control_sha256&&p.control_sha256===t.source_hashes?.control&&Number.isFinite(p.value);
- return {aq:{indel:aqOk&&Number.isFinite(a.summary?.indelPct)?a.summary.indelPct/100:null,ko:aqOk&&a.functional&&Number.isFinite(a.summary?.functionalKoPct)?a.summary.functionalKoPct/100:null,uncertain:aqOk&&Number.isFinite(a.summary?.functionalUncertainPct)?a.summary.functionalUncertainPct/100:null},te:{indel:teOk&&Number.isFinite(t.metrics.indel_fraction)?t.metrics.indel_fraction:null,ko:teCoding?p.value:null,uncertain:null}};
+ return {aq:{indel:aqOk&&Number.isFinite(a.summary?.indelPct)?a.summary.indelPct/100:null,ko:aqOk&&Number.isFinite(a.summary?.koScorePct)?a.summary.koScorePct/100:null},te:{indel:teOk&&Number.isFinite(t.metrics.indel_fraction)?t.metrics.indel_fraction:null,ko:traceEditKoScore(t)}};
 }
 export function outcomeGraph(rows,sampleType='clone',native=false,interactive=false){
  if(native)return nativeOutcomeGraph(rows,sampleType,native,interactive);
  const width=1080,height=220+rows.length*112;
  const text=(x,y,value,size=14,color='#284249',weight=400)=>`<text x="${x}" y="${y}" style="font-size:${size}px" fill="${color}" font-weight="${weight}">${esc(value)}</text>`;
- const bar=(x,y,value,color,uncertain=null)=>{
+ const bar=(x,y,value,color)=>{
   if(!Number.isFinite(value))return `<line x1="${x}" x2="${x+160}" y1="${y+6}" y2="${y+6}" stroke="#bbc8cd" stroke-dasharray="4 4"/>`+text(x+165,y+11,'N/A',12,'#70818a');
   const clamp=v=>Math.max(0,Math.min(1,v));
   let out=`<rect x="${x}" y="${y}" width="160" height="12" rx="5" fill="#e9eef1"/><rect x="${x}" y="${y}" width="${160*clamp(value)}" height="12" rx="4" fill="${color}"/>`;
-  return out+text(x+165,y+11,value===0&&uncertain>0?'Not resolved':percent(value)+(uncertain>0?'*':''),12,color,600);
+  return out+text(x+165,y+11,percent(value),12,color,600);
  };
- let body=`<title>Two-model clone screening</title><desc>Indel estimates and coding-aware knockout estimates for Assured QC and TraceEdit. QC functional loss and TraceEdit possible disruption have different definitions; scores are not averaged.</desc><defs><pattern id="qc-uncertain" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#fff0d0"/><path d="M0 6L6 0" stroke="#d4a14a"/></pattern></defs><rect width="1080" height="${height}" rx="18" fill="white"/>`;
+ let body=`<title>Two-model clone screening</title><desc>Indel score and ICE-style predicted knockout score from each model: fitted contributions with a net length change not divisible by three or at least 21 bp in magnitude. Not a probability of functional knockout.</desc><rect width="1080" height="${height}" rx="18" fill="white"/>`;
  body+=text(25,36,sampleType==='pool'?'Pool screening':'Clone screening',25,'#183c43',650)+text(25,62,'Two models. One next step. Select a sample for evidence.',14);
  body+=text(25,108,'SAMPLE / DELETION',12)+text(300,108,'INDEL SCORE',13,'#183c43',600)+text(610,108,'PREDICTED KNOCKOUT SCORE',12,'#183c43',600)+text(890,108,'NEXT STEP',12);
  for(const x of [310,650]){body+=text(x,130,'0%',11,'#73848a')+text(x+133,130,'100%',11,'#73848a');}
@@ -49,13 +57,13 @@ export function outcomeGraph(rows,sampleType='clone',native=false,interactive=fa
   body+=text(25,y+16,short,17,'#183c43',600)+text(25,y+40,simple.deletion,13,'#70818a');
   body+=text(245,y+13,'QC',12,'#287b89',600)+text(245,y+48,'TE',12,'#7760aa',600);
   body+=bar(310,y,s.aq.indel,'#287b89')+bar(310,y+35,s.te.indel,'#7760aa');
-  
-  body+=bar(650,y,s.aq.ko,'#287b89',s.aq.uncertain)+bar(650,y+35,s.te.ko,'#7760aa');
-  
+
+  body+=bar(650,y,s.aq.ko,'#287b89')+bar(650,y+35,s.te.ko,'#7760aa');
+
   body+=`<rect x="885" y="${y+10}" width="178" height="32" rx="16" fill="${status==='Validate by Western blot'?'#e4f2ed':'#f5eee1'}"/>`+text(893,y+31,status,11,color,600);
   body+=`<line x1="25" x2="1055" y1="${y+94}" y2="${y+94}" stroke="#e8eef0"/></g>`;
  });
- body+=text(25,height-36,'QC = Assured QC   |   TE = TraceEdit   |   * Partly resolved; see detailed report.',12)+text(25,height-14,'Predicted scores, not confirmed knockout. Validate by Western blot.',12);
+ body+=text(25,height-36,'QC = Assured QC | TE = TraceEdit | Predicted KO: frameshift or indel of 21 bp or more (ICE-style).',12)+text(25,height-14,'Predicted scores, not confirmed knockout. Validate by Western blot.',12);
  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" style="display:block;width:100%;min-width:860px;height:auto;font-family:Segoe UI,Arial,sans-serif" role="${interactive?'group':'img'}" aria-label="Two-model editing and knockout results">${body}</svg>`;
 }
 export function bindOutcomeGraph(host,inspect){host.querySelectorAll('[data-sample]').forEach(n=>{n.onclick=()=>inspect(Number(n.dataset.sample));n.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(Number(n.dataset.sample));}};});}
