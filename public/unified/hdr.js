@@ -1,4 +1,4 @@
-import {escapeHtml as esc,percent,targetsOf} from './core.js';
+import {escapeHtml as esc,percent,targetsOf,compare,variantKey} from './core.js';
 export function estimatedHdr(row,engine){
  const donors=row.donorVariants;
  const unavailable=reason=>({value:null,partial:null,status:'Unresolved',reason});
@@ -75,3 +75,28 @@ export function desiredOutcome(row,engine){
 }
 export function goalCard(row,engine){const g=desiredOutcome(row,engine);return `<div class="goal-card"><small>${esc(g.label)}</small><strong>${g.value===null?'Unresolved':percent(g.value)}</strong><span>${esc(g.status)}</span><details><summary>What this estimate counts</summary><p>${esc(g.reason)}</p></details></div>`;}
 export function hdrCard(row,engine){const h=estimatedHdr(row,engine),targets=targetsOf(row);const signals=targets.map(t=>engine==='aq'?row.aq?.markers?.find(v=>v.position===t.position&&v.alt===t.alt)?.raw:row.te?.variants?.find(v=>v.position===t.position&&v.alt===t.alt)?.sample_alt_signal);const valid=signals.length&&signals.every(Number.isFinite);const target=valid?(Math.min(...signals)===Math.max(...signals)?percent(signals[0]):`${percent(Math.min(...signals))}–${percent(Math.max(...signals))}`):'Not available';return `${goalCard(row,engine)}<details><summary>Donor incorporation and target-base signal</summary><div class="hdr-card"><div><small>Estimated HDR · best fit</small><strong>${h.value===null?esc(h.status):percent(h.value)}</strong><small>${esc(h.status)}</small>${h.partial===null||h.partial===undefined?'':`<small>Partial donor-pattern: ${percent(h.partial)}</small>`}</div><div><small>Intended-base signal</small><strong>${target}</strong></div></div><details><summary>HDR estimate details</summary><p>${esc(h.reason)} Estimates are fitted signal contributions, not confirmed allele or cell frequencies. Do not add HDR, target signal and indels.</p></details></details>`;}
+
+/** Presentation triage for SNP screens: intended-edit fit, HDR and engine review status. */
+export function snpResult(row,sampleType='clone'){
+ const review=compare(row),aq=desiredOutcome(row,'aq'),te=desiredOutcome(row,'te'),hdrAq=estimatedHdr(row,'aq'),hdrTe=estimatedHdr(row,'te');
+ const targets=targetsOf(row);
+ const label=targets.length?targets.map(variantKey).join(', '):'No intended change selected';
+ const edit=Number.isFinite(aq.value)&&Number.isFinite(te.value)?Math.min(aq.value,te.value):Number.isFinite(aq.value)?aq.value:Number.isFinite(te.value)?te.value:null;
+ const hdr=Number.isFinite(hdrAq.value)&&Number.isFinite(hdrTe.value)?Math.min(hdrAq.value,hdrTe.value):Number.isFinite(hdrAq.value)?hdrAq.value:Number.isFinite(hdrTe.value)?hdrTe.value:null;
+ const indelAq=Number.isFinite(row.aq?.summary?.indelPct)?row.aq.summary.indelPct/100:null;
+ const indelTe=Number.isFinite(row.te?.metrics?.indel_fraction)?row.te.metrics.indel_fraction:null;
+ const indel=Number.isFinite(indelAq)&&Number.isFinite(indelTe)?Math.max(indelAq,indelTe):indelAq??indelTe;
+ let status='Review engines';
+ if(!row.aq?.ok && !row.te?.metrics)status='Resequence';
+ else if(!row.aq?.ok || !row.te?.metrics)status='Review model failure';
+ else if(sampleType==='pool'||row.sampleType==='pool')status='Pool only';
+ else if(review.label==='Incomplete'||review.label==='Input mismatch')status=review.label==='Input mismatch'?'Input mismatch':'Resequence';
+ else if(review.label==='Similar estimates'&&Number.isFinite(edit)&&edit>=.9&&(!Number.isFinite(indel)||indel<=.05))status='Prioritize for confirmation';
+ else if(review.label==='Similar estimates')status='Review trace';
+ else if(review.label==='Review engine difference'||review.label==='QC review')status='Review engines';
+ return {label,edit,hdr,indel,status,review,aq,te,hdrAq,hdrTe};
+}
+export function snpCard(row,sampleType='clone'){
+ const s=snpResult(row,sampleType);
+ return `<section class="goal-card compact-ko"><div class="heading"><div><small>Intended edit · QC / TraceEdit</small><strong>${s.aq.value===null?'—':percent(s.aq.value)} / ${s.te.value===null?'—':percent(s.te.value)}</strong></div><div><b>${esc(s.label)}</b><p>${esc(s.status)}</p></div></div><div class="hdr-card"><div><small>Estimated HDR · min of engines</small><strong>${s.hdr===null?'—':percent(s.hdr)}</strong></div><div><small>Engine review</small><strong>${esc(s.review.label)}</strong></div></div><small>Fitted contributions and target signals, not confirmed genotypes. Confirm by clone sequencing.</small><details><summary>Estimates &amp; review details</summary><ul>${s.review.reasons.map(r=>`<li>${esc(r)}</li>`).join('')}</ul><p>AQ: ${esc(s.aq.status)} · TE: ${esc(s.te.status)}</p><p>HDR AQ ${s.hdrAq.value===null?esc(s.hdrAq.status):percent(s.hdrAq.value)} · TE ${s.hdrTe.value===null?esc(s.hdrTe.status):percent(s.hdrTe.value)}</p></details></section>`;
+}

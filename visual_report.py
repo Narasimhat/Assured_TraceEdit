@@ -12,6 +12,43 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, 
 INK='#203c39'; MUTED='#5c706b'; PALETTE=['#177e89','#db8437','#786bb0','#4b9974','#ba5a70','#517aa5']
 DYES=['#16a05a','#2568bc','#252525','#e23b37']
 
+def _short_label(sample):
+    base=Path(str(sample or '')).stem
+    import re
+    m=re.match(r'^cl(\d+)', base, re.I)
+    return f'Clone {m.group(1)}' if m else (base.split('_')[0] if base else 'Sample')
+
+def _take_home(results, settings):
+    sample_type=(settings.get('sampleType') or settings.get('sample_type') or 'clone')
+    workflow=settings.get('workflow') or ('snp' if any(r.get('variants') for r in results) else 'knockout')
+    if sample_type=='pool':
+        return ['Take home: pool screen — do not pick clones from these estimates.',
+                'Use these reads for editing activity only, then sequence individual clones before validation.']
+    picks=[]
+    for r in results:
+        if not r.get('metrics'):
+            continue
+        label=_short_label(r.get('sample'))
+        wb=(r.get('westernBlot') or {}).get('priority','')
+        ko=r.get('knockoutPrediction') or {}
+        if 'Prioritize for Western blot' in wb or (isinstance(ko.get('value'), (int,float)) and ko['value']>=0.8 and (ko.get('unresolved') or 0)<=0.1 and r['metrics'].get('r_squared',0)>=0.95):
+            picks.append(label);continue
+        target=r.get('target_variant') or settings.get('target_variant')
+        if target and r.get('variants'):
+            hit=next((v for v in r['variants'] if v.get('position')==target.get('position') and v.get('alt')==target.get('alt')), None)
+            sig=hit.get('background_corrected_signal') if hit else None
+            if isinstance(sig,(int,float)) and sig>=0.9 and r['metrics'].get('indel_fraction',1)<=0.05 and r['metrics'].get('r_squared',0)>=0.95:
+                picks.append(label)
+    if picks:
+        uniq=list(dict.fromkeys(picks))
+        shown=', '.join(uniq[:5])
+        more=f' (+{len(uniq)-5} more)' if len(uniq)>5 else ''
+        goal='confirmation sequencing' if workflow=='snp' else 'Western blot validation'
+        return [f'Take home: advance {shown}{more} for {goal}.',
+                'TraceEdit-only provisional shortlist. Confirm independently before banking clones.']
+    return ['Take home: no clone met provisional TraceEdit top-pick thresholds.',
+            'Review the outcome bars and QC notes before discarding borderline candidates.']
+
 def outcome_bins(result):
     bins=defaultdict(float)
     for o in result.get('outcomes',[]):
@@ -99,8 +136,11 @@ def build_visual_report(bundle,indices,out,title,height,caption,centers,labels):
     small=all_bins-major
     color_map={k:(color_map[k] if k not in small else '#b8c4bf') for k in keys}
     successful=sum(bool(r.get('metrics')) for r in results)
-    story=[p(title,'Title'),p('EDITING EVIDENCE / VISUAL REVIEW'),Spacer(1,8),p(f"{len(results)} reads  |  {successful} fitted  |  {len(results)-successful} no calls",'Heading2'),
-           p('Start with the outcome bars. Different deletion sizes have different colours; a failed read is shown as no call, never as wild type.')]
+    take_lines=_take_home(results, bundle.get('settings') or {})
+    story=[p(title,'Title'),p('TRACEEDIT · CLONE SELECTION'),Spacer(1,6),
+           p(take_lines[0],'Heading2'),*[p(line) for line in take_lines[1:]],Spacer(1,8),
+           p(f"{len(results)} reads  |  {successful} fitted  |  {len(results)-successful} no calls",'Heading2'),
+           p('Start with the shortlist above, then the outcome bars. Failed reads are shown as no call, never as wild type.')]
     for start in range(0,len(results),14):
         if start:story.extend([PageBreak(),p('Outcome overview - continued','Heading2')])
         rows=results[start:start+14];story.append(overview(rows,[r['_display_id'] for r in rows],color_map))
