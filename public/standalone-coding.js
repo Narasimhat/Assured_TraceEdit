@@ -1,3 +1,4 @@
+import {outcomeGraph,bindOutcomeGraph} from './unified/outcome-graph.js';
 import {referenceFromFile} from './unified/reference.js';
 import {readAnnotations} from './unified/annotations.js';
 import {koAssessment,koCard} from './unified/knockout.js';
@@ -28,5 +29,5 @@ window.TraceEditCoding={
   result.westernBlot=assessment(result,settings);
  },
  card(result,settings){const box=document.createElement('div');box.innerHTML=koCard(rowFor(result,settings),settings.mode==='clones'?'clone':'pool','traceedit');return box;},
- summary(bundle,host){host.replaceChildren();const n=bundle.results.filter(r=>assessment(r,bundle.settings).priority==='Prioritize for Western blot').length;const title=document.createElement('h3');title.textContent=n+' candidates for Western blot · TraceEdit only';host.append(title);const p=document.createElement('p');p.textContent='Predictive screening · select a sample for coding evidence.';host.append(p);}
+ summary(bundle,host,inspect){host.replaceChildren();const n=bundle.results.filter(r=>assessment(r,bundle.settings).priority==='Prioritize for Western blot').length;const title=document.createElement('h3');title.textContent=n+' candidates for Western blot · TraceEdit only';host.append(title);const p=document.createElement('p');p.textContent='Predictive screening · select a sample for coding evidence.';host.append(p);const graph=document.createElement('div');graph.style.overflowX='auto';const rows=bundle.results.map(r=>({...r,_contextVerified:rowFor(r,bundle.settings).contextVerified}));graph.innerHTML=outcomeGraph(rows,bundle.settings.mode==='clones'?'clone':'pool',true,true);bindOutcomeGraph(graph,inspect);host.append(graph);const save=document.createElement('button');save.textContent='Download graph SVG';save.className='secondary';save.onclick=()=>{const url=URL.createObjectURL(new Blob([outcomeGraph(rows,bundle.settings.mode==='clones'?'clone':'pool',true)],{type:'image/svg+xml'}));const a=document.createElement('a');a.href=url;a.download='TraceEdit_results.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);};host.append(save);}
 };
