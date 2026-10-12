@@ -24,10 +24,11 @@
       ]
     }
   ],
-  "rewrites": [
+  "redirects": [
     {
       "source": "/",
-      "destination": "/unified.html"
+      "destination": "/unified.html",
+      "permanent": false
     }
   ]
 }
