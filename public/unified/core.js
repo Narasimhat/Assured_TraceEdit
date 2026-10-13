@@ -1,4 +1,4 @@
-export const VERSION = '1.5.2';
+export const VERSION = '1.6.0';
 export const dna = value => String(value || '').replace(/\s+/g, '').toUpperCase();
 export const variantKey = v => `${v.ref}${v.position}${v.alt}`;
 export const percent = v => Number.isFinite(v) ? `${(v * 100).toFixed(1)}%` : '—';

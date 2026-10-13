@@ -64,3 +64,34 @@ NMD predictions use the matching mRNA exon annotation, or consistently labelled 
 Western blot priority is an unvalidated triage rule: at least 80% possible-KO contribution, at most 10% unresolved model contribution, both engine fits at least 0.95, native Q20 fractions at least 0.70, upstream mismatch at most 0.08, matching input hashes, and out-of-frame contributions within 15 percentage points. Unresolved warnings block prioritization. Scores are not averaged between engines: the coding prediction annotates TraceEdit outcomes; AssuredQC provides a consistency check. Bulk pools never receive a clone-selection recommendation.
 
 The screen, combined HTML report, CSV and JSON include these predictions. Standalone/native engine reports retain their original outputs. Original experiments and reference files remain excluded from Git and deployment uploads.
+
+
+## Publication reports (workspace 1.6.0)
+
+The combined Results view and standalone TraceEdit now offer Publication PDF and
+Figure package exports. The combined HTML summary uses the same shortlist rules
+as the PDF. Exports summarize all rows and show native sequence evidence for up
+to 12 shortlisted samples. Figure packages contain vector PDF/SVG,
+CSV, legends and a manifest with source hashes and exact stored settings.
+600-dpi PNGs are downloaded in separate parts (up to two figures) to fit hosted response limits.
+No engine is rerun during export; scores are never averaged. Standalone QC at
+its separate deployment is unchanged.
+
+Shortlists require reviewed experiment/pairing context and original source
+hashes. When QC is present, failed QC, mismatched files, poor fit or disagreement
+blocks joint prioritization. SNP candidates need >=95% signal at every intended
+base and <=1% indels, with mixed donor markers flagged for phasing. KO candidates
+need >=80% screening contribution and a dominant, high-quality matched deletion
+junction. The KO screening rule counts non-triplet or >=21 bp net changes; it is
+not a functional knockout probability. At most six candidates are retained per
+control/target group; no minimum is forced. Full warning text remains available.
+These are provisional thresholds, not a trained or calibrated classifier.
+
+The hosted report API accepts at most 96 rows per download, within the existing
+4 MB request/response limits. For large outputs, use PDF or smaller batches;
+full JSON and combined HTML remain available. Missing figures/scores are stated
+explicitly. Native SNP figures require the intended bases to be in stored trace
+windows. Select intended bases and retain both design donors when applicable.
+The main workflow currently uses a 150-base TE fit window; reports made outside
+the app with 120 bases may differ. Reproduce numerical results using identical
+WT bytes, targets, guides, donors and fit settings, not just matching filenames.

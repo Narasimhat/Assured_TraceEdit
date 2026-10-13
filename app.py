@@ -166,4 +166,16 @@ def export():
     if len(payload)>4_000_000: raise ValueError('Export exceeds the cloud response limit. Select fewer figure rows or use vector PDF/SVG.')
     return send_file(io.BytesIO(payload),download_name=formats[fmt],as_attachment=True)
 
+@app.post('/api/publication')
+def publication_export():
+    from publication_report import validate_publication, export_report
+    body = validate_publication(request.get_json())
+    with tempfile.TemporaryDirectory(prefix='clone-publication-') as tmp:
+        result = export_report(body, Path(tmp))
+        payload = result.read_bytes()
+        filename = result.name
+    if len(payload) > 4_000_000:
+        raise ValueError('Export exceeds the hosted response limit. Download PDF instead of the figure package, or export a smaller batch.')
+    return send_file(io.BytesIO(payload), download_name=filename, as_attachment=True)
+
 if __name__=='__main__': app.run('127.0.0.1',8767)
