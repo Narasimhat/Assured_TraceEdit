@@ -46,12 +46,13 @@ export function reviewRows(bundle){
  return rows;
 }
 export function screeningSvg(rows){
+ const dual=rows.some(r=>r.aq), engines=dual?['aq','te']:['te'];
  const w=1080,h=140+rows.length*76,txt=(x,y,s,size=13,c='#24444c')=>`<text x="${x}" y="${y}" font-size="${size}" fill="${c}">${esc(s)}</text>`;
- let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" style="width:100%;min-width:900px;height:auto" role="img" aria-label="Clone screening scores"><rect width="${w}" height="${h}" fill="white"/><g font-family="Arial,sans-serif">${txt(20,30,'Clone screening | QC and TraceEdit',22)}${txt(20,59,'Independent estimates; no averaged score. Screening predictions require validation.',12)}${txt(20,90,'SAMPLE')}${txt(280,90,'INDEL SCORE')}${txt(570,90,rows.every(r=>r.workflow==='knockout')?'PREDICTED KO SCORE':rows.every(r=>r.workflow==='snp')?'INTENDED-BASE SIGNAL':'KO / INTENDED SIGNAL')}${txt(870,90,'NEXT STEP')}`;
+ let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" style="width:100%;min-width:900px;height:auto" role="img" aria-label="Clone screening scores"><rect width="${w}" height="${h}" fill="white"/><g font-family="Arial,sans-serif">${txt(20,30,dual?'Clone screening | QC and TraceEdit':'TraceEdit clone screening',22)}${txt(20,59,dual?'Independent estimates; no averaged score. Screening predictions require validation.':'Prioritize candidates for validation. Scores are screening estimates.',12)}${txt(20,90,'SAMPLE')}${txt(280,90,'INDEL SCORE')}${txt(570,90,rows.every(r=>r.workflow==='knockout')?'PREDICTED KO SCORE':rows.every(r=>r.workflow==='snp')?'INTENDED-BASE SIGNAL':'KO / INTENDED SIGNAL')}${txt(870,90,'NEXT STEP')}`;
  const bar=(x,y,v,color)=>finite(v)?`<rect x="${x}" y="${y}" width="160" height="9" fill="#eef2f3"/><rect x="${x}" y="${y}" width="${160*Math.max(0,Math.min(1,v))}" height="9" fill="${color}"/>${txt(x+165,y+9,percent(v),11,color)}`:txt(x,y+9,'Not available',11,'#75858d');
  for(const [i,r] of rows.entries()){
   const y=112+i*76;const short=r.sample?.replace(/\.ab1$/i,'')||'Sample';s+=txt(20,y+15,short.length>31?short.slice(0,30)+'...':short,12)+txt(870,y+15,r.action,12);
-  for(const [j,e] of ['aq','te'].entries()){
+  for(const [j,e] of engines.entries()){
    const color=e==='aq'?'#147e88':'#785eaa';const v=r.workflow==='knockout'?r.scores[e].ko:e==='te'?r.target:(r.markers.filter(m=>m.intended).length?Math.min(...r.markers.filter(m=>m.intended).map(m=>r.aq?.markers?.find(a=>variantKey(a)===variantKey(m))?.raw??NaN)):null);
    s+=txt(250,y+j*20+10,e==='aq'?'QC':'TE',10,color)+bar(280,y+j*20,r.scores[e].indel,color)+bar(570,y+j*20,v,color);
   }s+=`<line x1="20" x2="1060" y1="${y+57}" y2="${y+57}" stroke="#e0e8eb"/>`;

@@ -31,3 +31,10 @@ test('native adapter retains pool status and requires matching context hashes',a
  const {nativeBundle,reviewRows}=await import('../public/unified/publication.js');const t=row().te;t.sample='clone';const native={settings:{mode:'clones',project_context:{reviewed:true,control_sha256:'wrong',sample_sha256:['s']}},results:[t]};
  assert.equal(reviewRows(nativeBundle(native))[0].action,'Review setup');native.settings.project_context.control_sha256='c';assert.equal(reviewRows(nativeBundle(native))[0].action,'First choice');native.settings.mode='pool';assert.equal(reviewRows(nativeBundle(native))[0].action,'Pool only');
 });
+test('native-only screening graph omits absent QC while retaining unavailable TraceEdit evidence',async()=>{
+ const {reviewRows,screeningSvg}=await import('../public/unified/publication.js');
+ const r=row();const native=screeningSvg(reviewRows(bundle(r)));
+ assert.match(native,/TraceEdit clone screening/);assert.doesNotMatch(native,/>QC</);assert.doesNotMatch(native,/Not available/);
+ r.te={error:'bad read'};assert.match(screeningSvg(reviewRows(bundle(r))),/Not available/);
+ r.aq={ok:false};assert.match(screeningSvg(reviewRows(bundle(r))),/>QC</);
+});

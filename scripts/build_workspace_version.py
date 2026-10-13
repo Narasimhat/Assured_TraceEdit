@@ -5,7 +5,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 files = [root/'app.py', root/'engine.py', root/'knockout_prediction.py', root/'reference_api.py', root/'public/unified.html', root/'public/workspace-version.js']
-files += [root/'public'/name for name in ['app.js','index.html','standalone-coding.js','design-workflow.js','style.css']]
+files += [root/'public'/name for name in ['app.js','index.html','standalone-coding.js','design-workflow.js','style.css','standalone-clean.css']]
 files += [root/'visual_report.py', root/'publication_report.py', root/'public/standalone-publication.js']
 files += sorted((root/'public/unified').rglob('*.js'))
 files += sorted((root/'public/unified').rglob('*.css'))

@@ -81,6 +81,7 @@ def export_report(body, out):
         story.append(table(['Sample', 'Priority', 'Reason / next step'], [[r['sample'], r['action'], ' '.join(r['reasons'])] for r in selected], [150,80,width-230]))
     else: story.append(p('No clones meet all screening checks. Review the per-sample reasons; a missing recommendation is not a zero editing score.'))
     story.extend([Spacer(1,12), p('Before downstream use', 'Heading2'), p('Confirm clone identity and the complete edit genotype. For knockout candidates, validate protein loss by Western blot. Review SNP-array/karyotype, identity and contamination QC before banking; document passage, provenance and post-thaw QC. These validation results are not inferred from sequencing.'), p('Screening values are fitted contributions or dye-channel signals, not calibrated genotype or protein-loss probabilities. QC and TraceEdit scores are kept separate. Recommendations are provisional, rule-based review decisions; at most six per control/target group.'), PageBreak()])
+    engines = ('aq', 'te') if any(r.get('aqSource') for r in rows) else ('te',)
     exports = []
     def save(fig, name):
         for ext in ('svg','pdf'): fig.savefig(out/f'{name}.{ext}', bbox_inches='tight')
@@ -93,7 +94,7 @@ def export_report(body, out):
         subset = rows[start:start+12]
         fig, axes = plt.subplots(1,2,figsize=(10, max(3, 1.4+len(subset)*.55)), sharey=True)
         for i,r in enumerate(subset):
-            for j,e in enumerate(('aq','te')):
+            for j,e in enumerate(engines):
                 for col,key in enumerate(('indel','ko' if r['workflow']=='knockout' else 'target')):
                     v = r['scores'][e].get(key) if key!='target' else (r.get('target') if e=='te' else r.get('aqTarget'))
                     if v is None: axes[col].text(1,i+(j-.5)*.28,'N/A',fontsize=6,va='center',color=palette[j])
@@ -105,7 +106,7 @@ def export_report(body, out):
             axis.set(xlim=(0,127),xticks=[0,50,100],ylim=(len(subset)-.5,-.8),xlabel='Contribution / signal (%)',title=title)
             axis.spines[['top','right']].set_visible(False)
         from matplotlib.patches import Patch
-        fig.legend(handles=[Patch(color=palette[0],label='QC'),Patch(color=palette[1],label='TraceEdit')],loc='lower center',ncol=2,frameon=False)
+        fig.legend(handles=[Patch(color=palette[j],label='QC' if e=='aq' else 'TraceEdit') for j,e in enumerate(engines)],loc='lower center',ncol=len(engines),frameon=False)
         fig.tight_layout(rect=[0,.05,1,1]);name=f'screening_{page}';save(fig,name)
         story.extend([p(f'Screening results {start+1}-{start+len(subset)}','Heading2'), Image(str(out/f'{name}.png'),width=width,height=width*max(3,1.4+len(subset)*.55)/10),p('Predicted KO screening sums non-triplet or >=21 bp net changes. Intended-base signal is not an HDR allele fraction. N/A means unavailable, never zero. Mixed workflows are labelled in the table below.','ReportSmall'),table(['Sample / workflow','Next step','Reason'], [[r['sample']+' / '+r['workflow'],r['action'],' '.join(r['reasons'])] for r in subset],[155,90,width-245]),PageBreak()])
     # Native trace evidence is already oriented/scaled by the analysis engine.
