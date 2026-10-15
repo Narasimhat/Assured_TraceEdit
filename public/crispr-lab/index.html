@@ -376,16 +376,16 @@
     {
       id: "pam",
       concept: "PAM recognition",
-      prompt: "SpCas9’s PAM on the non-target strand is best described as:",
+      prompt: "SpCas9 PAM on the non-target strand is best described as:",
       choices: [
-        { label: "5′-NGG-3′ (N = any base)", correct: true },
-        { label: "5′-ATG-3′ start codon", correct: false },
-        { label: "5′-TATA-3′ box", correct: false }
+        { label: "5'-NGG-3' (N = any base)", correct: true },
+        { label: "5'-ATG-3' start codon", correct: false },
+        { label: "5'-TATA-3' box", correct: false }
       ]
     },
     {
       id: "pair",
-      concept: "RNA–DNA pairing",
+      concept: "RNA-DNA pairing",
       prompt: "Opposite DNA adenine (A), the guide RNA should carry:",
       choices: [
         { label: "U (uracil)", correct: true },
@@ -818,6 +818,27 @@
     showPostQuizQuestion();
   }
 
+  function answerPostQuiz(choiceIndex) {
+    if (postQuizIndex < 0 || postQuizIndex >= POST_QUIZ.length) return;
+    const q = POST_QUIZ[postQuizIndex];
+    const choice = q.choices[choiceIndex];
+    if (!choice) return;
+    // Disable further clicks for this question
+    quizPanel.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+    if (choice.correct) {
+      postQuizCorrect++;
+      feedback.style.color = "var(--success)";
+      feedback.textContent = "Correct.";
+    } else {
+      updateScore(-6);
+      noteMiss(q.concept);
+      feedback.style.color = "var(--danger)";
+      feedback.textContent = `Missed: ${q.concept}. Review this idea in the report.`;
+    }
+    postQuizIndex++;
+    setTimeout(showPostQuizQuestion, 400);
+  }
+
   function showPostQuizQuestion() {
     hideQuiz();
     if (postQuizIndex >= POST_QUIZ.length) {
@@ -827,29 +848,24 @@
     const q = POST_QUIZ[postQuizIndex];
     quizOpen = true;
     quizPanel.classList.add("visible");
-    quizPanel.innerHTML = `<h3>Post-lab ${postQuizIndex + 1}/${POST_QUIZ.length} — ${q.concept}</h3><p style="margin:0 0 12px;color:var(--muted);font-size:0.88rem;">${q.prompt}</p><div class="quiz-options"></div>`;
-    const opts = quizPanel.querySelector(".quiz-options");
-    q.choices.forEach((choice) => {
+    quizPanel.innerHTML = `<h3>Post-lab ${postQuizIndex + 1}/${POST_QUIZ.length} — ${q.concept}</h3><p style="margin:0 0 12px;color:var(--muted);font-size:0.88rem;">${q.prompt}</p><div class="quiz-options" id="post-quiz-opts"></div>`;
+    const opts = document.getElementById("post-quiz-opts");
+    q.choices.forEach((choice, i) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = choice.label;
-      btn.onclick = () => {
-        if (choice.correct) {
-          postQuizCorrect++;
-          feedback.style.color = "var(--success)";
-          feedback.textContent = "Correct.";
-        } else {
-          updateScore(-6);
-          noteMiss(q.concept);
-          feedback.style.color = "var(--danger)";
-          feedback.textContent = `Missed: ${q.concept}. Review this idea in the report.`;
-        }
-        postQuizIndex++;
-        setTimeout(showPostQuizQuestion, 450);
-      };
+      btn.dataset.choiceIndex = String(i);
+      btn.dataset.correct = choice.correct ? "1" : "0";
+      btn.addEventListener("click", () => answerPostQuiz(i));
       opts.appendChild(btn);
     });
   }
+
+  // Test/automation helper
+  window.__crisprLab = {
+    answerPostQuiz,
+    getState: () => ({ stage, scenarioId, difficulty, score, postQuizIndex, postQuizCorrect, repairMode })
+  };
 
   function showMasteryReport() {
     hideQuiz();
