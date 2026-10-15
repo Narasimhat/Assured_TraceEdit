@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRISPR-Cas9 Virtual Bench</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #06141a;
+      --bg: #0a1f27;
+      --panel: rgba(12, 42, 52, 0.72);
+      --ink: #e8f4f2;
+      --muted: #8ba8b0;
+      --accent: #2ec4b6;
+      --accent-glow: rgba(46, 196, 182, 0.35);
+      --success: #3dd68c;
+      --danger: #ff6b6b;
+      --pam: #f0b429;
+      --warn: #f0b429;
+      --a: #e85d5d;
+      --t: #4d8ef7;
+      --c: #e6c84a;
+      --g: #3bbf7a;
+      --u: #c084fc;
+      --line: rgba(142, 196, 188, 0.18);
+      --radius: 14px;
+      --font-display: "Sora", sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --base-size: 34px;
+      --base-h: 38px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink); font-family: var(--font-display);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(46, 196, 182, 0.16), transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, rgba(77, 142, 247, 0.12), transparent 50%),
+        linear-gradient(165deg, var(--bg-deep) 0%, var(--bg) 45%, #0d2830 100%);
+      background-attachment: fixed;
+    }
+    body::before {
+      content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.35;
+      background-image:
+        linear-gradient(rgba(46, 196, 182, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(46, 196, 182, 0.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+    }
+    .container { position: relative; max-width: 960px; width: 100%; margin: 0 auto; padding: 28px 18px 48px; }
+    header.hero {
+      text-align: center; margin-bottom: 22px; padding-bottom: 18px;
+      border-bottom: 1px solid var(--line); animation: rise-in 0.55s ease both;
+    }
+    .brand-mark {
+      display: inline-flex; align-items: center; gap: 8px; font-size: 0.72rem;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 10px;
+    }
+    .brand-mark span {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow); animation: pulse-dot 2.2s ease-in-out infinite;
+    }
+    h1 { margin: 0; font-size: clamp(1.75rem, 5vw, 2.45rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; }
+    h1 em { font-style: normal; color: var(--accent); }
+    .subtitle { color: var(--muted); margin: 10px auto 0; max-width: 38rem; font-size: 0.98rem; line-height: 1.45; }
+    .gene-bar {
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center;
+      margin: 18px 0 8px; animation: rise-in 0.55s ease 0.08s both;
+    }
+    .gene-bar .field-label {
+      font-size: 0.72rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+    }
+    .gene-toggle, .diff-toggle {
+      display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 999px;
+      overflow: hidden; background: rgba(6, 20, 26, 0.55); max-width: 100%; justify-content: center;
+    }
+    .gene-toggle button, .diff-toggle button {
+      background: transparent; color: var(--muted); border: none; border-radius: 0;
+      padding: 8px 12px; font-size: 0.78rem; font-weight: 600; font-family: var(--font-display);
+    }
+    .gene-toggle button.active, .diff-toggle button.active { background: var(--accent); color: var(--bg-deep); }
+    .score-chip {
+      font-family: var(--font-mono); font-size: 0.78rem; color: var(--accent);
+      border: 1px solid var(--line); padding: 7px 12px; border-radius: 999px; background: rgba(6, 20, 26, 0.45);
+    }
+    .stage-tracker {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px;
+      animation: rise-in 0.55s ease 0.12s both;
+    }
+    .step {
+      text-align: center; padding: 10px 8px; border-radius: 10px; color: var(--muted);
+      font-weight: 600; font-size: 0.78rem; border: 1px solid transparent; background: rgba(6, 20, 26, 0.35);
+      transition: color 0.25s, border-color 0.25s, background 0.25s;
+    }
+    .step.active {
+      color: var(--ink); border-color: rgba(46, 196, 182, 0.45); background: rgba(46, 196, 182, 0.12);
+    }
+    .step.done { color: var(--success); border-color: rgba(61, 214, 140, 0.25); }
+    .workspace {
+      background: var(--panel); backdrop-filter: blur(10px); border: 1px solid var(--line);
+      padding: 22px; border-radius: var(--radius); margin-bottom: 16px; animation: rise-in 0.55s ease 0.18s both;
+    }
+    .instruction-box {
+      background: rgba(6, 20, 26, 0.65); border-left: 3px solid var(--accent);
+      padding: 14px 16px; border-radius: 8px; margin-bottom: 20px; line-height: 1.55; font-size: 0.94rem;
+    }
+    .instruction-box code {
+      font-family: var(--font-mono); font-size: 0.86em; background: rgba(46, 196, 182, 0.12);
+      padding: 1px 6px; border-radius: 4px;
+    }
+    .dna-container {
+      display: flex; flex-direction: column; gap: 10px; overflow-x: auto; padding: 18px 4px;
+      align-items: center; min-height: 140px; -webkit-overflow-scrolling: touch;
+    }
+    .strand-row { display: flex; gap: 5px; align-items: center; min-width: max-content; }
+    .strand-label {
+      width: 88px; flex-shrink: 0; font-size: 0.7rem; color: var(--muted); font-weight: 600;
+      font-family: var(--font-mono);
+    }
+    .base {
+      width: var(--base-size); height: var(--base-h); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-weight: 600; font-size: 0.98rem; color: #fff;
+      cursor: pointer; transition: transform 0.18s ease, box-shadow 0.18s ease; user-select: none;
+    }
+    .base:hover { transform: translateY(-3px); }
+    .base:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .base-A { background: var(--a); }
+    .base-T { background: var(--t); }
+    .base-C { background: var(--c); color: #122018; }
+    .base-G { background: var(--g); color: #122018; }
+    .base-U { background: var(--u); }
+    .base-empty { background: rgba(51, 75, 84, 0.85); border: 2px dashed #6f8b94; color: #94aeb6; }
+    .pam-highlight { outline: 3px solid var(--pam); box-shadow: 0 0 14px rgba(240, 180, 41, 0.45); animation: pam-glow 1.6s ease-in-out infinite; }
+    .target-highlight { outline: 2px dashed var(--accent); }
+    .cut-gap { margin-right: 20px; transition: margin 0.45s cubic-bezier(0.34, 1.2, 0.64, 1); }
+    .controls { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+    button {
+      background: var(--accent); color: var(--bg-deep); border: none; padding: 11px 18px;
+      border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 0.88rem; font-family: var(--font-display);
+      transition: opacity 0.2s, transform 0.12s;
+    }
+    button:hover { opacity: 0.92; }
+    button:active { transform: scale(0.98); }
+    button.secondary { background: #3a5560; color: #fff; }
+    button.danger { background: var(--danger); color: #fff; }
+    button.success { background: var(--success); color: #0b2418; }
+    .feedback { text-align: center; margin-top: 14px; font-weight: 600; min-height: 28px; font-size: 0.92rem; }
+    .quiz-panel, .report-panel {
+      display: none; margin-top: 16px; padding: 16px; border-radius: 10px;
+      border: 1px solid var(--line); background: rgba(6, 20, 26, 0.55); animation: rise-in 0.35s ease both;
+    }
+    .quiz-panel.visible, .report-panel.visible { display: block; }
+    .quiz-panel h3, .report-panel h3 { margin: 0 0 10px; font-size: 0.95rem; font-weight: 600; }
+    .quiz-options { display: flex; flex-direction: column; gap: 8px; }
+    .quiz-options button { text-align: left; background: rgba(58, 85, 96, 0.65); color: var(--ink); font-weight: 500; }
+    .quiz-options button:hover { background: rgba(46, 196, 182, 0.25); }
+    .mastery {
+      display: none; text-align: center; margin-top: 14px; padding: 16px; border-radius: 10px;
+      border: 1px solid rgba(46, 196, 182, 0.35); background: rgba(46, 196, 182, 0.08); animation: rise-in 0.4s ease both;
+    }
+    .mastery.visible { display: block; }
+    .mastery .tier { font-size: 1.2rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .report-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; text-align: left;
+      font-size: 0.88rem; margin: 12px 0;
+    }
+    .report-grid dt { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .report-grid dd { margin: 2px 0 0; font-weight: 600; }
+    .missed-list { text-align: left; margin: 10px 0 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.88rem; }
+    .missed-list li { margin-bottom: 4px; }
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: center;
+      font-size: 0.75rem; color: var(--muted); margin-top: 8px;
+    }
+    .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+    @keyframes rise-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(0.85); }
+    }
+    @keyframes pam-glow {
+      0%, 100% { box-shadow: 0 0 10px rgba(240, 180, 41, 0.35); }
+      50% { box-shadow: 0 0 18px rgba(240, 180, 41, 0.7); }
+    }
+    @media (max-width: 640px) {
+      .container { padding: 18px 12px 36px; }
+      .workspace { padding: 16px 12px; }
+      .stage-tracker { grid-template-columns: 1fr 1fr; gap: 6px; }
+      .step { font-size: 0.72rem; padding: 8px 6px; }
+      .strand-label { width: 68px; font-size: 0.62rem; }
+      :root { --base-size: 28px; --base-h: 32px; }
+      .base { font-size: 0.85rem; border-radius: 6px; }
+      button { padding: 10px 12px; font-size: 0.8rem; }
+      .report-grid { grid-template-columns: 1fr; }
+    }
+    @media print {
+      body { background: #fff; color: #111; }
+      body::before, .gene-bar, .stage-tracker, .dna-container, .controls, .feedback, .quiz-panel, .legend, .brand-mark { display: none !important; }
+      .workspace, .mastery, .report-panel { display: block !important; background: #fff; border: 1px solid #ccc; color: #111; box-shadow: none; backdrop-filter: none; }
+      .mastery .tier, h1 em { color: #0a7a6e; }
+      .report-grid dt { color: #555; }
+      .instruction-box { border-left-color: #0a7a6e; background: #f5f5f5; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header class="hero">
+    <div class="brand-mark"><span aria-hidden="true"></span> Teaching simulator</div>
+    <h1>CRISPR-Cas9 <em>Virtual Bench</em></h1>
+    <p class="subtitle">PAM → guide → cut → repair, with off-target traps and a printable mastery report. Educational practice — not a wet-lab protocol.</p>
+  </header>
+
+  <div class="gene-bar">
+    <span class="field-label">Scenario</span>
+    <div class="gene-toggle" role="group" aria-label="Gene scenario" id="gene-toggle"></div>
+    <span class="field-label">gRNA length</span>
+    <div class="diff-toggle" role="group" aria-label="Difficulty">
+      <button type="button" data-diff="easy" class="active">Easy (6 nt)</button>
+      <button type="button" data-diff="challenge">Challenge (10 nt)</button>
+    </div>
+    <div class="score-chip" id="score-chip" aria-live="polite">Mastery 100</div>
+  </div>
+
+  <div class="stage-tracker" aria-label="Lab stages">
+    <div class="step active" id="st-1">1. Locate PAM</div>
+    <div class="step" id="st-2">2. Design gRNA</div>
+    <div class="step" id="st-3">3. Cas9 Cleavage</div>
+    <div class="step" id="st-4">4. DNA Repair</div>
+  </div>
+
+  <div class="workspace">
+    <div class="instruction-box" id="instructions"></div>
+    <div class="dna-container" id="dna-board"></div>
+    <div class="controls" id="control-panel"></div>
+    <div class="feedback" id="feedback" role="status"></div>
+    <div class="quiz-panel" id="quiz-panel" aria-live="polite"></div>
+    <div class="mastery" id="mastery"></div>
+    <div class="report-panel" id="report-panel"></div>
+  </div>
+
+  <div class="legend" aria-hidden="true">
+    <span><i style="background:var(--a)"></i>A</span>
+    <span><i style="background:var(--t)"></i>T</span>
+    <span><i style="background:var(--c)"></i>C</span>
+    <span><i style="background:var(--g)"></i>G</span>
+    <span><i style="background:var(--u)"></i>U (RNA)</span>
+    <span><i style="background:var(--pam)"></i>PAM</span>
+  </div>
+</div>
+
+<script>
+  /** Complementary bottom strand for a top 5′→3′ sequence */
+  function complement(top) {
+    const map = { A: "T", T: "A", C: "G", G: "C" };
+    return top.map((b) => map[b]);
+  }
+  function dnaToRna(seq) {
+    return seq.map((b) => (b === "T" ? "U" : b));
+  }
+  function bottomLabel(bottom, start, len) {
+    return bottom.slice(start, start + len).join("-");
+  }
+
+  /**
+   * Teaching scenarios. Each has a decoy NGG (off-target trap) and easy/challenge spacers.
+   * gRNA matches the non-target (top) sequence with T→U; pairs to the highlighted bottom target.
+   */
+  const SCENARIOS = {
+    hbb: {
+      id: "hbb",
+      short: "HBB",
+      name: "HBB sickle-cell",
+      disease: "Sickle-cell disease",
+      // Decoy AGG @0–2; therapeutic PAM AGG @12–14
+      topStrand: ["A","G","G","C","A","T","G","T","G","A","G","T","A","G","G","T"],
+      pamStart: 12,
+      pamLabel: "AGG",
+      pamPositionsLabel: "positions 13–15",
+      decoys: [{ start: 0, end: 2, message: "Off-target trap: this upstream AGG looks like a PAM, but it is not next to your therapeutic spacer. Binding here risks cutting the wrong locus — choose the AGG immediately 3′ of the HBB target (positions 13–15)." }],
+      easy: { targetStart: 6, targetLen: 6 },
+      challenge: { targetStart: 2, targetLen: 10 },
+      nearMatchHint: "One-base mismatch guides can still bind weakly and cut similar sites elsewhere in the genome.",
+      missionEasy: "A patient has a sickle-cell point mutation in <em>HBB</em>. SpCas9 needs <strong>PAM 5′-NGG-3′</strong> next to the intended spacer. Find the therapeutic <strong>AGG</strong> (not the upstream decoy).",
+      missionChallenge: "Same <em>HBB</em> mission — but design a <strong>10-nt</strong> guide. Still lock the correct PAM (AGG at positions 13–15), ignoring the decoy AGG upstream.",
+      nhejNote: "NHEJ: simulated indel introduces a frameshift knockout in this HBB fragment.",
+      hdrNote: "HDR: donor integrated — healthy HBB teaching sequence restored.",
+      applyNhej(top, bottom) { top[10] = "C"; bottom[10] = "G"; },
+      applyHdr(top, bottom) { top[7] = "A"; bottom[7] = "T"; }
+    },
+    cftr: {
+      id: "cftr",
+      short: "CFTR",
+      name: "CFTR (cystic fibrosis)",
+      disease: "Cystic fibrosis",
+      topStrand: ["T","G","G","A","T","G","C","G","T","A","G","T","T","G","G","C"],
+      pamStart: 12,
+      pamLabel: "TGG",
+      pamPositionsLabel: "positions 13–15",
+      decoys: [{ start: 0, end: 2, message: "Off-target trap: this 5′ TGG is a real NGG motif but sits away from the intended CFTR spacer. Cutting here would not edit the disease-relevant site — pick the TGG at positions 13–15." }],
+      easy: { targetStart: 6, targetLen: 6 },
+      challenge: { targetStart: 2, targetLen: 10 },
+      nearMatchHint: "A near-match guide to CFTR-like sequences can create off-target DSBs in related genes.",
+      missionEasy: "Simplified <em>CFTR</em> fragment (cystic fibrosis). Locate the therapeutic <strong>TGG</strong> PAM — avoid the decoy TGG at the 5′ end.",
+      missionChallenge: "<em>CFTR</em> challenge mode: build a <strong>10-nt</strong> guide after locking the correct TGG PAM (positions 13–15).",
+      nhejNote: "NHEJ: indel simulation knocks out this CFTR teaching frame.",
+      hdrNote: "HDR: donor corrected the teaching mutation in this CFTR fragment.",
+      applyNhej(top, bottom) { top[10] = "A"; bottom[10] = "T"; },
+      applyHdr(top, bottom) { top[8] = "A"; bottom[8] = "T"; }
+    },
+    pcsk9: {
+      id: "pcsk9",
+      short: "PCSK9",
+      name: "PCSK9 (LDL cholesterol)",
+      disease: "Familial hypercholesterolemia (teaching)",
+      topStrand: ["A","G","G","C","T","G","A","C","G","T","C","A","C","G","G","A"],
+      pamStart: 12,
+      pamLabel: "CGG",
+      pamPositionsLabel: "positions 13–15",
+      decoys: [{ start: 0, end: 2, message: "Off-target trap: this AGG is an NGG site, but it is not the PAM for the PCSK9 spacer you are teaching. Choose the CGG at positions 13–15 beside the intended target." }],
+      easy: { targetStart: 6, targetLen: 6 },
+      challenge: { targetStart: 2, targetLen: 10 },
+      nearMatchHint: "PCSK9-like off-targets matter clinically — specificity of the spacer is as important as finding any NGG.",
+      missionEasy: "Teaching case: lower LDL via <em>PCSK9</em> editing concepts. Lock the therapeutic <strong>CGG</strong> PAM (ignore the decoy AGG).",
+      missionChallenge: "<em>PCSK9</em> challenge: 10-nt guide after selecting the correct CGG PAM.",
+      nhejNote: "NHEJ: simulated loss-of-function indel in this PCSK9 fragment (knockout teaching path).",
+      hdrNote: "HDR: donor writes a precise teaching edit into the PCSK9 fragment.",
+      applyNhej(top, bottom) { top[9] = "A"; bottom[9] = "T"; },
+      applyHdr(top, bottom) { top[7] = "T"; bottom[7] = "A"; }
+    },
+    dmd: {
+      id: "dmd",
+      short: "DMD",
+      name: "DMD (Duchenne)",
+      disease: "Duchenne muscular dystrophy (exon teaching)",
+      topStrand: ["G","G","A","A","C","G","T","C","A","G","C","T","A","G","G","C"],
+      pamStart: 12,
+      pamLabel: "AGG",
+      pamPositionsLabel: "positions 13–15",
+      decoys: [{ start: 0, end: 2, message: "Off-target trap: GGA is NGG-like at the 5′ end, but exon-skipping logic needs the PAM next to your intended DMD spacer — use AGG at positions 13–15." }],
+      easy: { targetStart: 6, targetLen: 6 },
+      challenge: { targetStart: 2, targetLen: 10 },
+      nearMatchHint: "Dystrophin has many similar exons — a mismatch guide can hit the wrong exon.",
+      missionEasy: "Simplified <em>DMD</em> exon fragment. Find the therapeutic <strong>AGG</strong> PAM; the 5′ GGA is a decoy.",
+      missionChallenge: "<em>DMD</em> challenge: design a <strong>10-nt</strong> guide after locking the correct AGG.",
+      nhejNote: "NHEJ: indel simulation (teaching stand-in for disruptive repair at this exon fragment).",
+      hdrNote: "HDR: donor restores the intended teaching DMD fragment sequence.",
+      applyNhej(top, bottom) { top[10] = "T"; bottom[10] = "A"; },
+      applyHdr(top, bottom) { top[8] = "G"; bottom[8] = "C"; }
+    }
+  };
+
+  // Finalize derived fields
+  Object.values(SCENARIOS).forEach((s) => {
+    s.bottomStrand = complement(s.topStrand);
+    ["easy", "challenge"].forEach((d) => {
+      const cfg = s[d];
+      const topSlice = s.topStrand.slice(cfg.targetStart, cfg.targetStart + cfg.targetLen);
+      cfg.expectedRNA = dnaToRna(topSlice);
+      cfg.targetBottomLabel = bottomLabel(s.bottomStrand, cfg.targetStart, cfg.targetLen);
+      // near-match: flip last base to a different RNA letter
+      const nm = [...cfg.expectedRNA];
+      const last = nm[nm.length - 1];
+      nm[nm.length - 1] = last === "U" ? "A" : last === "A" ? "U" : last === "G" ? "C" : "G";
+      cfg.nearMatchRNA = nm;
+    });
+  });
+
+  const POST_QUIZ = [
+    {
+      id: "pam",
+      concept: "PAM recognition",
+      prompt: "SpCas9 PAM on the non-target strand is best described as:",
+      choices: [
+        { label: "5'-NGG-3' (N = any base)", correct: true },
+        { label: "5'-ATG-3' start codon", correct: false },
+        { label: "5'-TATA-3' box", correct: false }
+      ]
+    },
+    {
+      id: "pair",
+      concept: "RNA-DNA pairing",
+      prompt: "Opposite DNA adenine (A), the guide RNA should carry:",
+      choices: [
+        { label: "U (uracil)", correct: true },
+        { label: "T (thymine)", correct: false },
+        { label: "G (guanine)", correct: false }
+      ]
+    },
+    {
+      id: "off",
+      concept: "Off-target risk",
+      prompt: "Why is a decoy NGG or a one-base-mismatched guide dangerous?",
+      choices: [
+        { label: "Cas9 may still bind/cut similar sites elsewhere in the genome", correct: true },
+        { label: "It permanently disables all DNA repair", correct: false },
+        { label: "PAM sequences cannot occur more than once per genome", correct: false }
+      ]
+    },
+    {
+      id: "repair",
+      concept: "Repair pathways",
+      prompt: "Which pathway is used when you want precise rewrite with a donor template?",
+      choices: [
+        { label: "HDR (homology-directed repair)", correct: true },
+        { label: "NHEJ only (always precise)", correct: false },
+        { label: "Transcription initiation", correct: false }
+      ]
+    },
+    {
+      id: "cut",
+      concept: "Cleavage geometry",
+      prompt: "Relative to the PAM, SpCas9 typically creates a DSB:",
+      choices: [
+        { label: "About 3 bp upstream of the PAM", correct: true },
+        { label: "Exactly inside the middle of the PAM", correct: false },
+        { label: "Only on the RNA strand", correct: false }
+      ]
+    }
+  ];
+
+  let scenarioId = "hbb";
+  let difficulty = "easy";
+  let scenario = SCENARIOS.hbb;
+  let diffCfg = scenario.easy;
+  let topStrand = [];
+  let bottomStrand = [];
+  let expectedRNA = [];
+  let userRNA = [];
+  let activeSlot = 0;
+  let stage = 1;
+  let isCut = false;
+  let score = 100;
+  let pendingAdvance = null;
+  let quizOpen = false;
+  let repairMode = null;
+  let missedConcepts = [];
+  let postQuizIndex = -1;
+  let postQuizCorrect = 0;
+  let trapsHit = { decoyPam: false, nearMatch: false };
+
+  const board = document.getElementById("dna-board");
+  const instructions = document.getElementById("instructions");
+  const controls = document.getElementById("control-panel");
+  const feedback = document.getElementById("feedback");
+  const quizPanel = document.getElementById("quiz-panel");
+  const masteryEl = document.getElementById("mastery");
+  const reportPanel = document.getElementById("report-panel");
+  const scoreChip = document.getElementById("score-chip");
+  const geneToggle = document.getElementById("gene-toggle");
+
+  function noteMiss(concept) {
+    if (!missedConcepts.includes(concept)) missedConcepts.push(concept);
+  }
+
+  function updateScore(delta) {
+    score = Math.max(0, Math.min(100, score + delta));
+    scoreChip.textContent = `Mastery ${score}`;
+  }
+
+  function masteryTier() {
+    const total = Math.round(score * 0.7 + (postQuizCorrect / POST_QUIZ.length) * 30);
+    if (total >= 90) return { tier: "Bench Expert", blurb: "Strong PAM, pairing, specificity, and repair reasoning.", total };
+    if (total >= 70) return { tier: "Proficient Editor", blurb: "Solid grasp — review missed concepts below.", total };
+    return { tier: "Apprentice", blurb: "Replay with challenge mode or another gene to tighten skills.", total };
+  }
+
+  function hideQuiz() {
+    quizOpen = false;
+    quizPanel.classList.remove("visible");
+    quizPanel.innerHTML = "";
+  }
+
+  function showQuiz(q) {
+    quizOpen = true;
+    quizPanel.classList.add("visible");
+    quizPanel.innerHTML = `<h3>Checkpoint — ${q.title}</h3><p style="margin:0 0 12px;color:var(--muted);font-size:0.88rem;">${q.prompt}</p><div class="quiz-options"></div>`;
+    const opts = quizPanel.querySelector(".quiz-options");
+    q.choices.forEach((choice) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = choice.label;
+      btn.onclick = () => {
+        if (choice.correct) {
+          feedback.style.color = "var(--success)";
+          feedback.textContent = q.success;
+          hideQuiz();
+          if (pendingAdvance) {
+            const next = pendingAdvance;
+            pendingAdvance = null;
+            setTimeout(next, 450);
+          }
+        } else {
+          updateScore(-8);
+          noteMiss(q.concept || q.title);
+          feedback.style.color = "var(--danger)";
+          feedback.textContent = q.fail;
+        }
+      };
+      opts.appendChild(btn);
+    });
+  }
+
+  function applyDifficultyConfig() {
+    scenario = SCENARIOS[scenarioId];
+    diffCfg = scenario[difficulty];
+    topStrand = [...scenario.topStrand];
+    bottomStrand = [...scenario.bottomStrand];
+    expectedRNA = [...diffCfg.expectedRNA];
+    userRNA = Array(expectedRNA.length).fill("?");
+  }
+
+  function setMissionCopy() {
+    const m = difficulty === "challenge" ? scenario.missionChallenge : scenario.missionEasy;
+    instructions.innerHTML = `<strong>Mission (${difficulty === "challenge" ? "10-nt challenge" : "6-nt easy"}):</strong> ${m}`;
+  }
+
+  function buildGeneToggle() {
+    geneToggle.innerHTML = "";
+    Object.values(SCENARIOS).forEach((s) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.gene = s.id;
+      btn.textContent = s.short === "HBB" ? "HBB sickle-cell" : s.short === "CFTR" ? "CFTR (CF)" : s.short === "PCSK9" ? "PCSK9 (LDL)" : "DMD (Duchenne)";
+      if (s.id === scenarioId) btn.classList.add("active");
+      btn.onclick = () => {
+        if (s.id === scenarioId && stage === 1 && !repairMode) return;
+        resetLab(s.id, difficulty);
+      };
+      geneToggle.appendChild(btn);
+    });
+  }
+
+  document.querySelectorAll(".diff-toggle button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const d = btn.dataset.diff;
+      if (d === difficulty && stage === 1 && !repairMode) return;
+      resetLab(scenarioId, d);
+    });
+  });
+
+  function resetLab(gene, diff) {
+    scenarioId = gene;
+    difficulty = diff;
+    applyDifficultyConfig();
+    activeSlot = 0;
+    isCut = false;
+    score = 100;
+    pendingAdvance = null;
+    repairMode = null;
+    missedConcepts = [];
+    postQuizIndex = -1;
+    postQuizCorrect = 0;
+    trapsHit = { decoyPam: false, nearMatch: false };
+    hideQuiz();
+    masteryEl.classList.remove("visible");
+    masteryEl.innerHTML = "";
+    reportPanel.classList.remove("visible");
+    reportPanel.innerHTML = "";
+    updateScore(0);
+    setMissionCopy();
+    buildGeneToggle();
+    document.querySelectorAll(".diff-toggle button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.diff === difficulty);
+    });
+    setStageUI(1);
+  }
+
+  function setStageUI(s) {
+    stage = s;
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById(`st-${i}`);
+      el.className = "step" + (i === s ? " active" : i < s ? " done" : "");
+    }
+    if (!quizOpen) feedback.textContent = "";
+    renderBoard();
+    renderControls();
+  }
+
+  function renderBoard() {
+    board.innerHTML = "";
+    const pamEnd = scenario.pamStart + 2;
+    const t0 = diffCfg.targetStart;
+    const t1 = t0 + diffCfg.targetLen - 1;
+
+    const topRow = document.createElement("div");
+    topRow.className = "strand-row";
+    topRow.innerHTML = `<div class="strand-label">5′ Top 3′</div>`;
+    topStrand.forEach((base, idx) => {
+      const el = document.createElement("div");
+      el.className = `base base-${base}`;
+      el.setAttribute("role", "button");
+      el.tabIndex = stage === 1 ? 0 : -1;
+      el.setAttribute("aria-label", `Top base ${idx + 1}: ${base}`);
+      if (stage >= 2 && idx >= scenario.pamStart && idx <= pamEnd) el.classList.add("pam-highlight");
+      if (isCut && idx === scenario.pamStart - 2) el.classList.add("cut-gap");
+      el.textContent = base;
+      el.onclick = () => handleTopStrandClick(idx);
+      el.onkeydown = (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleTopStrandClick(idx);
+        }
+      };
+      topRow.appendChild(el);
+    });
+    board.appendChild(topRow);
+
+    if (stage === 2 || stage === 3) {
+      const rnaRow = document.createElement("div");
+      rnaRow.className = "strand-row";
+      rnaRow.innerHTML = `<div class="strand-label" style="color:var(--u);">5′ gRNA 3′</div>`;
+      for (let i = 0; i < topStrand.length; i++) {
+        if (i >= t0 && i <= t1) {
+          const rIdx = i - t0;
+          const val = userRNA[rIdx];
+          const el = document.createElement("div");
+          el.className = `base ${val === "?" ? "base-empty" : "base-" + val}`;
+          if (stage === 2 && rIdx === activeSlot) el.style.outline = "2px solid #fff";
+          el.textContent = val;
+          el.onclick = () => {
+            if (stage === 2) {
+              activeSlot = rIdx;
+              renderBoard();
+            }
+          };
+          rnaRow.appendChild(el);
+        } else {
+          const spacer = document.createElement("div");
+          spacer.style.width = "var(--base-size)";
+          rnaRow.appendChild(spacer);
+        }
+      }
+      board.appendChild(rnaRow);
+    }
+
+    const botRow = document.createElement("div");
+    botRow.className = "strand-row";
+    botRow.innerHTML = `<div class="strand-label">3′ Bottom 5′</div>`;
+    bottomStrand.forEach((base, idx) => {
+      const el = document.createElement("div");
+      el.className = `base base-${base}`;
+      if (stage === 2 && idx >= t0 && idx <= t1) el.classList.add("target-highlight");
+      if (isCut && idx === scenario.pamStart - 2) el.classList.add("cut-gap");
+      el.textContent = base;
+      botRow.appendChild(el);
+    });
+    board.appendChild(botRow);
+  }
+
+  function handleTopStrandClick(idx) {
+    if (stage !== 1 || quizOpen) return;
+    const pamEnd = scenario.pamStart + 2;
+
+    for (const d of scenario.decoys) {
+      if (idx >= d.start && idx <= d.end) {
+        trapsHit.decoyPam = true;
+        updateScore(-7);
+        noteMiss("Off-target / decoy PAM");
+        feedback.style.color = "var(--danger)";
+        feedback.textContent = d.message;
+        return;
+      }
+    }
+
+    if (idx >= scenario.pamStart && idx <= pamEnd) {
+      feedback.style.color = "var(--success)";
+      feedback.textContent = `PAM (${scenario.pamLabel}) locked. Answer the checkpoint to continue.`;
+      pendingAdvance = () => {
+        instructions.innerHTML = `<strong>Stage 2 — Synthesize guide RNA (${diffCfg.targetLen} nt):</strong> Match the bottom-strand target <code>${diffCfg.targetBottomLabel}</code> (dashed). RNA rules: <strong>A↔U</strong>, DNA T↔A, C↔G. Watch for near-match traps.`;
+        setStageUI(2);
+      };
+      showQuiz({
+        title: "PAM recognition",
+        concept: "PAM recognition",
+        prompt: "Which motif did Cas9 use as the PAM on the non-target strand?",
+        choices: [
+          { label: "5′-NGG-3′ (N any base, then GG)", correct: true },
+          { label: "5′-TATA-3′ promoter box", correct: false },
+          { label: "5′-ATG-3′ start codon", correct: false }
+        ],
+        success: "Correct — SpCas9 needs NGG adjacent to the intended spacer.",
+        fail: "Not quite. SpCas9 recognizes NGG. Try again."
+      });
+    } else {
+      updateScore(-5);
+      noteMiss("PAM site selection");
+      feedback.style.color = "var(--danger)";
+      feedback.textContent = `Not a valid therapeutic NGG PAM. Look for ${scenario.pamLabel} at ${scenario.pamPositionsLabel} (and avoid decoy NGG sites).`;
+    }
+  }
+
+  function sequencesEqual(a, b) {
+    return a.length === b.length && a.every((v, i) => v === b[i]);
+  }
+
+  function inputRNABase(b) {
+    if (stage !== 2 || quizOpen) return;
+    userRNA[activeSlot] = b;
+    if (activeSlot < expectedRNA.length - 1) activeSlot++;
+    renderBoard();
+    if (userRNA.includes("?")) return;
+
+    if (sequencesEqual(userRNA, expectedRNA)) {
+      feedback.style.color = "var(--success)";
+      feedback.textContent = "Perfect hybridization. Checkpoint before cleavage.";
+      pendingAdvance = () => {
+        instructions.innerHTML = `<strong>Stage 3 — Endonuclease cleavage:</strong> Cas9’s <strong>HNH</strong> and <strong>RuvC</strong> domains align ~3 bp upstream of the PAM. Trigger the DSB.`;
+        setStageUI(3);
+      };
+      showQuiz({
+        title: "Base pairing",
+        concept: "RNA–DNA pairing",
+        prompt: "In an RNA–DNA hybrid, which RNA base pairs with DNA adenine (A)?",
+        choices: [
+          { label: "U (uracil)", correct: true },
+          { label: "T (thymine)", correct: false },
+          { label: "G (guanine)", correct: false }
+        ],
+        success: "Correct — RNA uses U opposite A.",
+        fail: "Remember: RNA pairs A↔U (DNA still uses T)."
+      });
+      return;
+    }
+
+    if (sequencesEqual(userRNA, diffCfg.nearMatchRNA)) {
+      trapsHit.nearMatch = true;
+      updateScore(-12);
+      noteMiss("Off-target / mismatched gRNA");
+      feedback.style.color = "var(--danger)";
+      feedback.textContent = `Near-match trap: your guide is only one base off (${userRNA.join("")} vs ${expectedRNA.join("")}). ${scenario.nearMatchHint} Clear RNA and rebuild the exact spacer.`;
+      return;
+    }
+
+    updateScore(-10);
+    noteMiss("gRNA complementarity");
+    feedback.style.color = "var(--danger)";
+    feedback.textContent = "Mismatch — off-target risk too high. Clear and retry (C→G, A→U, T→A).";
+  }
+
+  function renderControls() {
+    controls.innerHTML = "";
+    if (stage === 2) {
+      ["A", "U", "C", "G"].forEach((b) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `Add ${b}`;
+        btn.onclick = () => inputRNABase(b);
+        controls.appendChild(btn);
+      });
+      const resetBtn = document.createElement("button");
+      resetBtn.type = "button";
+      resetBtn.className = "secondary";
+      resetBtn.textContent = "Clear RNA";
+      resetBtn.onclick = () => {
+        userRNA = Array(expectedRNA.length).fill("?");
+        activeSlot = 0;
+        renderBoard();
+        feedback.textContent = "";
+      };
+      controls.appendChild(resetBtn);
+    } else if (stage === 3) {
+      const cutBtn = document.createElement("button");
+      cutBtn.type = "button";
+      cutBtn.className = "danger";
+      cutBtn.textContent = "Activate Cas9 cleavage";
+      cutBtn.onclick = () => {
+        if (quizOpen) return;
+        isCut = true;
+        renderBoard();
+        feedback.style.color = "var(--success)";
+        feedback.textContent = "Double-strand break created ~3 bp upstream of PAM.";
+        setTimeout(() => {
+          instructions.innerHTML = `<strong>Stage 4 — Cellular DNA repair:</strong> Choose <strong>knock out</strong> (NHEJ) or <strong>rewrite</strong> with a donor (HDR).`;
+          setStageUI(4);
+        }, 1000);
+      };
+      controls.appendChild(cutBtn);
+    } else if (stage === 4 && postQuizIndex < 0) {
+      const nhejBtn = document.createElement("button");
+      nhejBtn.type = "button";
+      nhejBtn.className = "secondary";
+      nhejBtn.textContent = "NHEJ (gene knockout)";
+      nhejBtn.onclick = () => finishRepair("NHEJ");
+      const hdrBtn = document.createElement("button");
+      hdrBtn.type = "button";
+      hdrBtn.className = "success";
+      hdrBtn.textContent = "HDR + donor template";
+      hdrBtn.onclick = () => finishRepair("HDR");
+      controls.appendChild(nhejBtn);
+      controls.appendChild(hdrBtn);
+    }
+  }
+
+  function finishRepair(mode) {
+    isCut = false;
+    repairMode = mode;
+    if (mode === "NHEJ") {
+      scenario.applyNhej(topStrand, bottomStrand);
+      feedback.style.color = "var(--warn)";
+      feedback.textContent = scenario.nhejNote + " Continue to the post-lab quiz.";
+    } else {
+      scenario.applyHdr(topStrand, bottomStrand);
+      feedback.style.color = "var(--success)";
+      feedback.textContent = scenario.hdrNote + " Continue to the post-lab quiz.";
+    }
+    renderBoard();
+    controls.innerHTML = "";
+    instructions.innerHTML = `<strong>Post-lab quiz:</strong> Answer ${POST_QUIZ.length} questions, then view your printable mastery report.`;
+    postQuizIndex = 0;
+    postQuizCorrect = 0;
+    showPostQuizQuestion();
+  }
+
+  function answerPostQuiz(choiceIndex) {
+    if (postQuizIndex < 0 || postQuizIndex >= POST_QUIZ.length) return;
+    const q = POST_QUIZ[postQuizIndex];
+    const choice = q.choices[choiceIndex];
+    if (!choice) return;
+    // Disable further clicks for this question
+    quizPanel.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+    if (choice.correct) {
+      postQuizCorrect++;
+      feedback.style.color = "var(--success)";
+      feedback.textContent = "Correct.";
+    } else {
+      updateScore(-6);
+      noteMiss(q.concept);
+      feedback.style.color = "var(--danger)";
+      feedback.textContent = `Missed: ${q.concept}. Review this idea in the report.`;
+    }
+    postQuizIndex++;
+    setTimeout(showPostQuizQuestion, 400);
+  }
+
+  function showPostQuizQuestion() {
+    hideQuiz();
+    if (postQuizIndex >= POST_QUIZ.length) {
+      showMasteryReport();
+      return;
+    }
+    const q = POST_QUIZ[postQuizIndex];
+    quizOpen = true;
+    quizPanel.classList.add("visible");
+    quizPanel.innerHTML = `<h3>Post-lab ${postQuizIndex + 1}/${POST_QUIZ.length} — ${q.concept}</h3><p style="margin:0 0 12px;color:var(--muted);font-size:0.88rem;">${q.prompt}</p><div class="quiz-options" id="post-quiz-opts"></div>`;
+    const opts = document.getElementById("post-quiz-opts");
+    q.choices.forEach((choice, i) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = choice.label;
+      btn.dataset.choiceIndex = String(i);
+      btn.dataset.correct = choice.correct ? "1" : "0";
+      btn.addEventListener("click", () => answerPostQuiz(i));
+      opts.appendChild(btn);
+    });
+  }
+
+  // Test/automation helper
+  window.__crisprLab = {
+    answerPostQuiz,
+    getState: () => ({ stage, scenarioId, difficulty, score, postQuizIndex, postQuizCorrect, repairMode })
+  };
+
+  function showMasteryReport() {
+    hideQuiz();
+    const { tier, blurb, total } = masteryTier();
+    const when = new Date().toLocaleString();
+    const traps = [];
+    if (trapsHit.decoyPam) traps.push("Decoy PAM encountered (good — you recovered)");
+    if (trapsHit.nearMatch) traps.push("Near-match gRNA trap encountered (good — you recovered)");
+    if (!traps.length) traps.push("No decoy/near-match traps triggered this run");
+
+    masteryEl.classList.add("visible");
+    masteryEl.innerHTML = `
+      <div class="tier">${tier}</div>
+      <div style="color:var(--muted);font-size:0.9rem;margin-bottom:6px;">Combined score ${total}/100 · Bench ${score}/100 · Post-quiz ${postQuizCorrect}/${POST_QUIZ.length}</div>
+      <div style="font-size:0.88rem;">${blurb}</div>
+    `;
+
+    reportPanel.classList.add("visible");
+    reportPanel.innerHTML = `
+      <h3>Mastery report — CRISPR-Cas9 Virtual Bench</h3>
+      <dl class="report-grid">
+        <div><dt>Scenario</dt><dd>${scenario.name}</dd></div>
+        <div><dt>Disease context</dt><dd>${scenario.disease}</dd></div>
+        <div><dt>Difficulty</dt><dd>${difficulty === "challenge" ? "Challenge (10 nt gRNA)" : "Easy (6 nt gRNA)"}</dd></div>
+        <div><dt>Repair pathway</dt><dd>${repairMode}</dd></div>
+        <div><dt>Bench score</dt><dd>${score}/100</dd></div>
+        <div><dt>Post-lab quiz</dt><dd>${postQuizCorrect}/${POST_QUIZ.length} correct</dd></div>
+        <div><dt>Combined</dt><dd>${total}/100 · ${tier}</dd></div>
+        <div><dt>Completed</dt><dd>${when}</dd></div>
+      </dl>
+      <div style="text-align:left;font-size:0.88rem;"><strong>Specificity notes</strong>
+        <ul class="missed-list">${traps.map((t) => `<li>${t}</li>`).join("")}</ul>
+      </div>
+      <div style="text-align:left;font-size:0.88rem;margin-top:8px;"><strong>Missed concepts</strong>
+        ${missedConcepts.length
+          ? `<ul class="missed-list">${missedConcepts.map((c) => `<li>${c}</li>`).join("")}</ul>`
+          : `<p style="color:var(--muted);margin:6px 0 0;">None recorded — excellent run.</p>`}
+      </div>
+      <p style="margin:14px 0 0;font-size:0.78rem;color:var(--muted);">Teaching simulator only — not a clinical or wet-lab protocol. Share or print this report for your notes.</p>
+    `;
+
+    controls.innerHTML = "";
+    const printBtn = document.createElement("button");
+    printBtn.type = "button";
+    printBtn.textContent = "Print / save report";
+    printBtn.onclick = () => window.print();
+    const shareBtn = document.createElement("button");
+    shareBtn.type = "button";
+    shareBtn.className = "secondary";
+    shareBtn.textContent = "Copy summary";
+    shareBtn.onclick = async () => {
+      const text = [
+        "CRISPR-Cas9 Virtual Bench — Mastery Report",
+        `Scenario: ${scenario.name} (${scenario.disease})`,
+        `Difficulty: ${difficulty}`,
+        `Pathway: ${repairMode}`,
+        `Bench ${score}/100 · Quiz ${postQuizCorrect}/${POST_QUIZ.length} · Combined ${total}/100 (${tier})`,
+        `Missed: ${missedConcepts.length ? missedConcepts.join("; ") : "none"}`,
+        `When: ${when}`
+      ].join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+        feedback.style.color = "var(--success)";
+        feedback.textContent = "Summary copied to clipboard.";
+      } catch {
+        feedback.style.color = "var(--warn)";
+        feedback.textContent = "Clipboard unavailable — use Print / save report.";
+      }
+    };
+    const replay = document.createElement("button");
+    replay.type = "button";
+    replay.className = "secondary";
+    replay.textContent = "Replay";
+    replay.onclick = () => resetLab(scenarioId, difficulty);
+    const nextGene = document.createElement("button");
+    nextGene.type = "button";
+    nextGene.className = "secondary";
+    const ids = Object.keys(SCENARIOS);
+    const nextId = ids[(ids.indexOf(scenarioId) + 1) % ids.length];
+    nextGene.textContent = `Try ${SCENARIOS[nextId].short}`;
+    nextGene.onclick = () => resetLab(nextId, difficulty);
+    controls.appendChild(printBtn);
+    controls.appendChild(shareBtn);
+    controls.appendChild(replay);
+    controls.appendChild(nextGene);
+  }
+
+  resetLab("hbb", "easy");
+</script>
+</body>
+</html>
