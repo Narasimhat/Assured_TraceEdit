@@ -3,286 +3,866 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CRISPR-Cas9 Interactive Lab</title>
+  <title>CRISPR-Cas9 Virtual Bench</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --success: #22c55e;
-      --danger: #ef4444;
-      --pam: #f59e0b;
-      --a: #ef4444;
-      --t: #3b82f6;
-      --c: #eab308;
-      --g: #22c55e;
-      --u: #a855f7;
+      --bg-deep: #06141a;
+      --bg: #0a1f27;
+      --panel: rgba(12, 42, 52, 0.72);
+      --panel-solid: #0c2a34;
+      --ink: #e8f4f2;
+      --muted: #8ba8b0;
+      --accent: #2ec4b6;
+      --accent-dim: #1a8f84;
+      --accent-glow: rgba(46, 196, 182, 0.35);
+      --success: #3dd68c;
+      --danger: #ff6b6b;
+      --pam: #f0b429;
+      --warn: #f0b429;
+      --a: #e85d5d;
+      --t: #4d8ef7;
+      --c: #e6c84a;
+      --g: #3bbf7a;
+      --u: #c084fc;
+      --line: rgba(142, 196, 188, 0.18);
+      --radius: 14px;
+      --font-display: "Sora", sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --base-size: 38px;
+      --base-h: 42px;
     }
-    * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+    * { box-sizing: border-box; }
+
     body {
-      margin: 0; padding: 20px;
-      background-color: var(--bg); color: var(--text);
-      display: flex; flex-direction: column; align-items: center;
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: var(--font-display);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(46, 196, 182, 0.16), transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, rgba(77, 142, 247, 0.12), transparent 50%),
+        linear-gradient(165deg, var(--bg-deep) 0%, var(--bg) 45%, #0d2830 100%);
+      background-attachment: fixed;
     }
-    .container { max-width: 900px; width: 100%; }
-    header {
-      text-align: center; margin-bottom: 24px;
-      border-bottom: 1px solid #334155; padding-bottom: 16px;
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.35;
+      background-image:
+        linear-gradient(rgba(46, 196, 182, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(46, 196, 182, 0.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
     }
-    h1 { margin: 0; color: var(--accent); font-size: 1.8rem; }
-    .subtitle { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
-    
+
+    .container {
+      position: relative;
+      max-width: 920px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 28px 18px 48px;
+    }
+
+    header.hero {
+      text-align: center;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+      animation: rise-in 0.55s ease both;
+    }
+
+    .brand-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .brand-mark span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+      animation: pulse-dot 2.2s ease-in-out infinite;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.75rem, 5vw, 2.45rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      color: var(--ink);
+    }
+
+    h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin: 10px auto 0;
+      max-width: 36rem;
+      font-size: 0.98rem;
+      line-height: 1.45;
+      font-weight: 400;
+    }
+
+    .gene-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      margin: 18px 0 8px;
+      animation: rise-in 0.55s ease 0.08s both;
+    }
+
+    .gene-bar label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .gene-toggle {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(6, 20, 26, 0.55);
+    }
+
+    .gene-toggle button {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-radius: 0;
+      padding: 8px 14px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-family: var(--font-display);
+    }
+
+    .gene-toggle button.active {
+      background: var(--accent);
+      color: var(--bg-deep);
+    }
+
+    .score-chip {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--accent);
+      border: 1px solid var(--line);
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(6, 20, 26, 0.45);
+    }
+
     .stage-tracker {
-      display: flex; justify-content: space-between; margin-bottom: 24px;
-      background: var(--card); padding: 12px 20px; border-radius: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 18px;
+      animation: rise-in 0.55s ease 0.12s both;
     }
-    .step { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
-    .step.active { color: var(--accent); text-decoration: underline; text-underline-offset: 6px; }
-    .step.done { color: var(--success); }
+
+    .step {
+      text-align: center;
+      padding: 10px 8px;
+      border-radius: 10px;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.78rem;
+      border: 1px solid transparent;
+      background: rgba(6, 20, 26, 0.35);
+      transition: color 0.25s, border-color 0.25s, background 0.25s;
+    }
+
+    .step.active {
+      color: var(--ink);
+      border-color: rgba(46, 196, 182, 0.45);
+      background: rgba(46, 196, 182, 0.12);
+      box-shadow: 0 0 0 1px rgba(46, 196, 182, 0.08);
+    }
+
+    .step.done {
+      color: var(--success);
+      border-color: rgba(61, 214, 140, 0.25);
+    }
+
     .workspace {
-      background: var(--card); padding: 24px; border-radius: 12px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.4); margin-bottom: 20px;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--line);
+      padding: 22px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      animation: rise-in 0.55s ease 0.18s both;
     }
+
     .instruction-box {
-      background: #0f172a; border-left: 4px solid var(--accent);
-      padding: 14px 18px; border-radius: 6px; margin-bottom: 24px;
-      line-height: 1.5; font-size: 0.95rem;
+      background: rgba(6, 20, 26, 0.65);
+      border-left: 3px solid var(--accent);
+      padding: 14px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      line-height: 1.55;
+      font-size: 0.94rem;
     }
+
+    .instruction-box strong { color: var(--ink); }
+    .instruction-box code {
+      font-family: var(--font-mono);
+      font-size: 0.86em;
+      background: rgba(46, 196, 182, 0.12);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
     .dna-container {
-      display: flex; flex-direction: column; gap: 8px;
-      overflow-x: auto; padding: 16px 0; align-items: center;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 18px 4px;
+      align-items: center;
+      min-height: 140px;
+      -webkit-overflow-scrolling: touch;
     }
-    .strand-row { display: flex; gap: 6px; align-items: center; }
-    .strand-label { width: 90px; font-size: 0.8rem; color: var(--muted); font-weight: bold; }
-    
+
+    .strand-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      min-width: max-content;
+    }
+
+    .strand-label {
+      width: 92px;
+      flex-shrink: 0;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 600;
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
+    }
+
     .base {
-      width: 38px; height: 42px; border-radius: 6px;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: bold; font-size: 1.1rem; color: #fff;
-      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
-      user-select: none; position: relative;
+      width: var(--base-size);
+      height: var(--base-h);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 1.05rem;
+      color: #fff;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, outline-color 0.2s;
+      user-select: none;
+      position: relative;
     }
-    .base:hover { transform: translateY(-2px); }
+
+    .base:hover { transform: translateY(-3px); }
+    .base:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
     .base-A { background: var(--a); }
     .base-T { background: var(--t); }
-    .base-C { background: var(--c); color: #0f172a; }
-    .base-G { background: var(--g); color: #0f172a; }
+    .base-C { background: var(--c); color: #122018; }
+    .base-G { background: var(--g); color: #122018; }
     .base-U { background: var(--u); }
-    .base-empty { background: #334155; border: 2px dashed #64748b; color: #94a3b8; }
-    .pam-highlight { outline: 3px solid var(--pam); box-shadow: 0 0 12px var(--pam); }
+    .base-empty {
+      background: rgba(51, 75, 84, 0.85);
+      border: 2px dashed #6f8b94;
+      color: #94aeb6;
+    }
+
+    .pam-highlight {
+      outline: 3px solid var(--pam);
+      box-shadow: 0 0 14px rgba(240, 180, 41, 0.45);
+      animation: pam-glow 1.6s ease-in-out infinite;
+    }
+
     .target-highlight { outline: 2px dashed var(--accent); }
-    .cut-gap { margin-right: 22px; transition: margin 0.4s ease; }
+
+    .cut-gap {
+      margin-right: 22px;
+      transition: margin 0.45s cubic-bezier(0.34, 1.2, 0.64, 1);
+    }
+
     .controls {
-      display: flex; gap: 12px; justify-content: center; margin-top: 20px; flex-wrap: wrap;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 18px;
+      flex-wrap: wrap;
     }
+
     button {
-      background: var(--accent); color: #0f172a; border: none;
-      padding: 10px 20px; border-radius: 8px; font-weight: 700;
-      cursor: pointer; font-size: 0.95rem; transition: opacity 0.2s, transform 0.1s;
+      background: var(--accent);
+      color: var(--bg-deep);
+      border: none;
+      padding: 11px 18px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-family: var(--font-display);
+      transition: opacity 0.2s, transform 0.12s, background 0.2s;
     }
-    button:hover { opacity: 0.9; }
+
+    button:hover { opacity: 0.92; }
     button:active { transform: scale(0.98); }
-    button.secondary { background: #475569; color: #fff; }
+    button.secondary { background: #3a5560; color: #fff; }
     button.danger { background: var(--danger); color: #fff; }
-    button.success { background: var(--success); color: #0f172a; }
+    button.success { background: var(--success); color: #0b2418; }
+
     .feedback {
-      text-align: center; margin-top: 16px; font-weight: 600; min-height: 24px;
+      text-align: center;
+      margin-top: 14px;
+      font-weight: 600;
+      min-height: 28px;
+      font-size: 0.92rem;
+      transition: opacity 0.25s;
+    }
+
+    .quiz-panel {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(6, 20, 26, 0.55);
+      animation: rise-in 0.35s ease both;
+    }
+
+    .quiz-panel.visible { display: block; }
+
+    .quiz-panel h3 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .quiz-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .quiz-options button {
+      text-align: left;
+      background: rgba(58, 85, 96, 0.65);
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    .quiz-options button:hover { background: rgba(46, 196, 182, 0.25); }
+
+    .mastery {
+      display: none;
+      text-align: center;
+      margin-top: 14px;
+      padding: 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(46, 196, 182, 0.35);
+      background: rgba(46, 196, 182, 0.08);
+      animation: rise-in 0.4s ease both;
+    }
+
+    .mastery.visible { display: block; }
+
+    .mastery .tier {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      justify-content: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .legend i {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      margin-right: 5px;
+      vertical-align: -1px;
+    }
+
+    @keyframes rise-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(0.85); }
+    }
+
+    @keyframes pam-glow {
+      0%, 100% { box-shadow: 0 0 10px rgba(240, 180, 41, 0.35); }
+      50% { box-shadow: 0 0 18px rgba(240, 180, 41, 0.7); }
+    }
+
+    @media (max-width: 640px) {
+      .container { padding: 18px 12px 36px; }
+      .workspace { padding: 16px 12px; }
+      .stage-tracker {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      .step { font-size: 0.72rem; padding: 8px 6px; }
+      .strand-label { width: 72px; font-size: 0.65rem; }
+      :root {
+        --base-size: 32px;
+        --base-h: 36px;
+      }
+      .base { font-size: 0.92rem; border-radius: 6px; }
+      button { padding: 10px 14px; font-size: 0.84rem; }
+      .gene-bar { gap: 8px; }
     }
   </style>
 </head>
 <body>
 <div class="container">
-  <header>
-    <h1>🧬 CRISPR-Cas9 Virtual Bench</h1>
-    <div class="subtitle">Interactive Molecular Gene Editing Simulator</div>
+  <header class="hero">
+    <div class="brand-mark"><span aria-hidden="true"></span> Teaching simulator</div>
+    <h1>CRISPR-Cas9 <em>Virtual Bench</em></h1>
+    <p class="subtitle">Walk a gene-editing mission from PAM recognition to repair — interactive molecular practice, not a wet-lab protocol.</p>
   </header>
-  <div class="stage-tracker">
+
+  <div class="gene-bar">
+    <label for="gene-hbb">Scenario</label>
+    <div class="gene-toggle" role="group" aria-label="Gene scenario">
+      <button type="button" id="gene-hbb" class="active" data-gene="hbb">HBB sickle-cell</button>
+      <button type="button" id="gene-cftr" data-gene="cftr">CFTR (CF)</button>
+    </div>
+    <div class="score-chip" id="score-chip" aria-live="polite">Mastery 100</div>
+  </div>
+
+  <div class="stage-tracker" aria-label="Lab stages">
     <div class="step active" id="st-1">1. Locate PAM</div>
     <div class="step" id="st-2">2. Design gRNA</div>
     <div class="step" id="st-3">3. Cas9 Cleavage</div>
     <div class="step" id="st-4">4. DNA Repair</div>
   </div>
+
   <div class="workspace">
-    <div class="instruction-box" id="instructions">
-      <strong>Mission:</strong> A patient has a sickle-cell point mutation in the <em>HBB</em> gene. Before Cas9 can unwind DNA, it must bind to a <strong>PAM sequence (5'-NGG-3')</strong> on the non-target strand (where N is any base followed by two Guanines). Click the first base of the <strong>AGG</strong> PAM sequence on the top strand (Indices 9–11).
-    </div>
+    <div class="instruction-box" id="instructions"></div>
     <div class="dna-container" id="dna-board"></div>
     <div class="controls" id="control-panel"></div>
-    <div class="feedback" id="feedback"></div>
+    <div class="feedback" id="feedback" role="status"></div>
+    <div class="quiz-panel" id="quiz-panel" aria-live="polite"></div>
+    <div class="mastery" id="mastery"></div>
+  </div>
+
+  <div class="legend" aria-hidden="true">
+    <span><i style="background:var(--a)"></i>A</span>
+    <span><i style="background:var(--t)"></i>T</span>
+    <span><i style="background:var(--c)"></i>C</span>
+    <span><i style="background:var(--g)"></i>G</span>
+    <span><i style="background:var(--u)"></i>U (RNA)</span>
+    <span><i style="background:var(--pam);outline:1px solid var(--pam)"></i>PAM</span>
   </div>
 </div>
+
 <script>
-  // Top strand (5' -> 3'): Target region is indices 3..8 (6 bases for fast gameplay), PAM is indices 9..11 (AGG)
-  const topStrand =    ['C','A','T','G','T','G','A','G','T','A','G','G','C','T'];
-  const bottomStrand = ['G','T','A','C','A','C','T','C','A','T','C','C','G','A'];
-  // Target template on bottom strand (3' -> 5'): indices 3..8 are C, A, C, T, C, A
-  // Correct complementary gRNA (5' -> 3'): G, U, G, A, G, U
-  const expectedRNA = ['G','U','G','A','G','U'];
-  let userRNA = ['?','?','?','?','?','?'];
+  const SCENARIOS = {
+    hbb: {
+      id: "hbb",
+      name: "HBB sickle-cell",
+      topStrand:    ["C","A","T","G","T","G","A","G","T","A","G","G","C","T"],
+      bottomStrand: ["G","T","A","C","A","C","T","C","A","T","C","C","G","A"],
+      pamStart: 9,
+      pamLabel: "AGG",
+      pamPositionsLabel: "positions 10–12",
+      targetStart: 3,
+      targetLen: 6,
+      expectedRNA: ["G","U","G","A","G","U"],
+      targetBottomLabel: "C-A-C-T-C-A",
+      mission: `A patient has a sickle-cell point mutation in the <em>HBB</em> gene. Before Cas9 can unwind DNA, it must bind to a <strong>PAM sequence (5′-NGG-3′)</strong> on the non-target strand (N = any base, then two guanines). Click the first base of the <strong>AGG</strong> PAM on the top strand (${"positions 10–12"}).`,
+      nhejNote: "NHEJ repair complete: a simulated indel introduced a frameshift knockout.",
+      hdrNote: "HDR repair complete: donor DNA integrated — healthy HBB sequence restored.",
+      applyNhej(top, bottom) { top[7] = "C"; bottom[7] = "G"; },
+      applyHdr(top, bottom) { top[4] = "A"; bottom[4] = "T"; }
+    },
+    cftr: {
+      id: "cftr",
+      name: "CFTR (cystic fibrosis)",
+      topStrand:    ["A","T","G","C","G","T","A","G","T","T","G","G","C","A"],
+      bottomStrand: ["T","A","C","G","C","A","T","C","A","A","C","C","G","T"],
+      pamStart: 9,
+      pamLabel: "TGG",
+      pamPositionsLabel: "positions 10–12",
+      targetStart: 3,
+      targetLen: 6,
+      expectedRNA: ["C","G","U","A","G","U"],
+      targetBottomLabel: "G-C-A-T-C-A",
+      mission: `Practice on a simplified <em>CFTR</em> teaching fragment (cystic fibrosis context). Locate the <strong>PAM (5′-NGG-3′)</strong> — here <strong>TGG</strong> — on the top strand (${"positions 10–12"}), then design a matching guide.`,
+      nhejNote: "NHEJ repair complete: indel simulation knocks out this CFTR fragment’s reading frame.",
+      hdrNote: "HDR repair complete: donor template corrected the teaching mutation in this CFTR fragment.",
+      applyNhej(top, bottom) { top[7] = "A"; bottom[7] = "T"; },
+      applyHdr(top, bottom) { top[5] = "A"; bottom[5] = "T"; }
+    }
+  };
+
+  let scenario = SCENARIOS.hbb;
+  let topStrand = [...scenario.topStrand];
+  let bottomStrand = [...scenario.bottomStrand];
+  let expectedRNA = [...scenario.expectedRNA];
+  let userRNA = ["?","?","?","?","?","?"];
   let activeSlot = 0;
   let stage = 1;
   let isCut = false;
-  const board = document.getElementById('dna-board');
-  const instructions = document.getElementById('instructions');
-  const controls = document.getElementById('control-panel');
-  const feedback = document.getElementById('feedback');
+  let score = 100;
+  let pendingAdvance = null;
+  let quizOpen = false;
+  let grnaAttempts = 0;
+
+  const board = document.getElementById("dna-board");
+  const instructions = document.getElementById("instructions");
+  const controls = document.getElementById("control-panel");
+  const feedback = document.getElementById("feedback");
+  const quizPanel = document.getElementById("quiz-panel");
+  const masteryEl = document.getElementById("mastery");
+  const scoreChip = document.getElementById("score-chip");
+
+  function updateScore(delta) {
+    score = Math.max(0, Math.min(100, score + delta));
+    scoreChip.textContent = `Mastery ${score}`;
+  }
+
+  function masteryTier() {
+    if (score >= 90) return { tier: "Bench Expert", blurb: "Strong PAM recognition, pairing, and repair choices." };
+    if (score >= 70) return { tier: "Proficient Editor", blurb: "Solid grasp — review any missed quiz or pairing steps." };
+    return { tier: "Apprentice", blurb: "Replay the bench to tighten PAM and base-pairing skills." };
+  }
+
+  function hideQuiz() {
+    quizOpen = false;
+    quizPanel.classList.remove("visible");
+    quizPanel.innerHTML = "";
+  }
+
+  function showQuiz(q) {
+    quizOpen = true;
+    quizPanel.classList.add("visible");
+    quizPanel.innerHTML = `<h3>Checkpoint — ${q.title}</h3><p style="margin:0 0 12px;color:var(--muted);font-size:0.88rem;">${q.prompt}</p><div class="quiz-options"></div>`;
+    const opts = quizPanel.querySelector(".quiz-options");
+    q.choices.forEach((choice) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = choice.label;
+      btn.onclick = () => {
+        if (choice.correct) {
+          feedback.style.color = "var(--success)";
+          feedback.textContent = q.success;
+          hideQuiz();
+          if (pendingAdvance) {
+            const next = pendingAdvance;
+            pendingAdvance = null;
+            setTimeout(next, 500);
+          }
+        } else {
+          updateScore(-8);
+          feedback.style.color = "var(--danger)";
+          feedback.textContent = q.fail;
+        }
+      };
+      opts.appendChild(btn);
+    });
+  }
+
+  function setMissionCopy() {
+    instructions.innerHTML = `<strong>Mission:</strong> ${scenario.mission}`;
+  }
+
+  function resetScenario(geneId) {
+    scenario = SCENARIOS[geneId];
+    topStrand = [...scenario.topStrand];
+    bottomStrand = [...scenario.bottomStrand];
+    expectedRNA = [...scenario.expectedRNA];
+    userRNA = ["?","?","?","?","?","?"];
+    activeSlot = 0;
+    isCut = false;
+    score = 100;
+    grnaAttempts = 0;
+    pendingAdvance = null;
+    hideQuiz();
+    masteryEl.classList.remove("visible");
+    masteryEl.innerHTML = "";
+    updateScore(0);
+    setMissionCopy();
+    setStageUI(1);
+    document.querySelectorAll(".gene-toggle button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.gene === geneId);
+    });
+  }
+
+  document.querySelectorAll(".gene-toggle button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.gene === scenario.id) return;
+      resetScenario(btn.dataset.gene);
+    });
+  });
+
   function setStageUI(s) {
     stage = s;
     for (let i = 1; i <= 4; i++) {
       const el = document.getElementById(`st-${i}`);
-      el.className = 'step' + (i === s ? ' active' : (i < s ? ' done' : ''));
+      el.className = "step" + (i === s ? " active" : i < s ? " done" : "");
     }
-    feedback.textContent = '';
+    if (!quizOpen) feedback.textContent = "";
     renderBoard();
     renderControls();
   }
+
   function renderBoard() {
-    board.innerHTML = '';
-    // Top Strand (5' -> 3' Non-Target / PAM Strand)
-    const topRow = document.createElement('div');
-    topRow.className = 'strand-row';
-    topRow.innerHTML = `<div class="strand-label">5' Top 3'</div>`;
+    board.innerHTML = "";
+    const pamEnd = scenario.pamStart + 2;
+    const t0 = scenario.targetStart;
+    const t1 = scenario.targetStart + scenario.targetLen - 1;
+
+    const topRow = document.createElement("div");
+    topRow.className = "strand-row";
+    topRow.innerHTML = `<div class="strand-label">5′ Top 3′</div>`;
     topStrand.forEach((base, idx) => {
-      const el = document.createElement('div');
+      const el = document.createElement("div");
       el.className = `base base-${base}`;
-      if (stage >= 2 && idx >= 9 && idx <= 11) el.classList.add('pam-highlight');
-      if (isCut && idx === 7) el.classList.add('cut-gap');
+      el.setAttribute("role", "button");
+      el.tabIndex = stage === 1 ? 0 : -1;
+      el.setAttribute("aria-label", `Top base ${idx + 1}: ${base}`);
+      if (stage >= 2 && idx >= scenario.pamStart && idx <= pamEnd) el.classList.add("pam-highlight");
+      if (isCut && idx === scenario.pamStart - 2) el.classList.add("cut-gap");
       el.textContent = base;
       el.onclick = () => handleTopStrandClick(idx);
+      el.onkeydown = (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleTopStrandClick(idx);
+        }
+      };
       topRow.appendChild(el);
     });
     board.appendChild(topRow);
-    // gRNA Strand Row (Visible in Stages 2 & 3)
+
     if (stage === 2 || stage === 3) {
-      const rnaRow = document.createElement('div');
-      rnaRow.className = 'strand-row';
-      rnaRow.innerHTML = `<div class="strand-label" style="color:#a855f7;">5' gRNA 3'</div>`;
+      const rnaRow = document.createElement("div");
+      rnaRow.className = "strand-row";
+      rnaRow.innerHTML = `<div class="strand-label" style="color:var(--u);">5′ gRNA 3′</div>`;
       for (let i = 0; i < topStrand.length; i++) {
-        if (i >= 3 && i <= 8) {
-          const rIdx = i - 3;
+        if (i >= t0 && i <= t1) {
+          const rIdx = i - t0;
           const val = userRNA[rIdx];
-          const el = document.createElement('div');
-          el.className = `base ${val === '?' ? 'base-empty' : 'base-' + val}`;
-          if (stage === 2 && rIdx === activeSlot) el.style.outline = '2px solid #fff';
+          const el = document.createElement("div");
+          el.className = `base ${val === "?" ? "base-empty" : "base-" + val}`;
+          if (stage === 2 && rIdx === activeSlot) el.style.outline = "2px solid #fff";
           el.textContent = val;
-          el.onclick = () => { if (stage === 2) { activeSlot = rIdx; renderBoard(); } };
+          el.onclick = () => {
+            if (stage === 2) {
+              activeSlot = rIdx;
+              renderBoard();
+            }
+          };
           rnaRow.appendChild(el);
         } else {
-          const spacer = document.createElement('div');
-          spacer.style.width = '38px';
+          const spacer = document.createElement("div");
+          spacer.style.width = "var(--base-size)";
           rnaRow.appendChild(spacer);
         }
       }
       board.appendChild(rnaRow);
     }
-    // Bottom Strand (3' -> 5' Target Strand)
-    const botRow = document.createElement('div');
-    botRow.className = 'strand-row';
-    botRow.innerHTML = `<div class="strand-label">3' Bottom 5'</div>`;
+
+    const botRow = document.createElement("div");
+    botRow.className = "strand-row";
+    botRow.innerHTML = `<div class="strand-label">3′ Bottom 5′</div>`;
     bottomStrand.forEach((base, idx) => {
-      const el = document.createElement('div');
+      const el = document.createElement("div");
       el.className = `base base-${base}`;
-      if (stage === 2 && idx >= 3 && idx <= 8) el.classList.add('target-highlight');
-      if (isCut && idx === 7) el.classList.add('cut-gap');
+      if (stage === 2 && idx >= t0 && idx <= t1) el.classList.add("target-highlight");
+      if (isCut && idx === scenario.pamStart - 2) el.classList.add("cut-gap");
       el.textContent = base;
       botRow.appendChild(el);
     });
     board.appendChild(botRow);
   }
+
   function handleTopStrandClick(idx) {
-    if (stage !== 1) return;
-    if (idx >= 9 && idx <= 11) {
-      feedback.style.color = 'var(--success)';
-      feedback.textContent = 'PAM Sequence (5\'-AGG-3\') locked! Advancing to gRNA synthesis...';
-      setTimeout(() => {
-        instructions.innerHTML = `<strong>Stage 2 — Synthesize Guide RNA (sgRNA):</strong> Match the 6-base target region on the <strong>3' Bottom Strand</strong> (dashed boxes: <code>C-A-C-T-C-A</code>) using RNA bases (remember: <strong>A pairs with U</strong>, T pairs with A, C pairs with G).`;
+    if (stage !== 1 || quizOpen) return;
+    const pamEnd = scenario.pamStart + 2;
+    if (idx >= scenario.pamStart && idx <= pamEnd) {
+      feedback.style.color = "var(--success)";
+      feedback.textContent = `PAM (${scenario.pamLabel}) locked. Answer the checkpoint to continue.`;
+      pendingAdvance = () => {
+        instructions.innerHTML = `<strong>Stage 2 — Synthesize guide RNA:</strong> Match the ${scenario.targetLen}-base target on the <strong>3′ bottom strand</strong> (dashed boxes: <code>${scenario.targetBottomLabel}</code>) using RNA bases (<strong>A pairs with U</strong>; DNA T pairs with A; C with G).`;
         setStageUI(2);
-      }, 900);
+      };
+      showQuiz({
+        title: "PAM recognition",
+        prompt: "Which motif did Cas9 use as the PAM on the non-target strand?",
+        choices: [
+          { label: "5′-NGG-3′ (N any base, then GG)", correct: true },
+          { label: "5′-TATA-3′ promoter box", correct: false },
+          { label: "5′-ATG-3′ start codon", correct: false }
+        ],
+        success: "Correct — SpCas9 needs NGG adjacent to the target.",
+        fail: "Not quite. SpCas9 recognizes NGG. Try again."
+      });
     } else {
-      feedback.style.color = 'var(--danger)';
-      feedback.textContent = 'Not a valid NGG PAM site downstream of the mutation. Look at bases 10–12 (A-G-G).';
+      updateScore(-5);
+      feedback.style.color = "var(--danger)";
+      feedback.textContent = `Not a valid NGG PAM site. Look for ${scenario.pamLabel} at ${scenario.pamPositionsLabel}.`;
     }
   }
+
   function inputRNABase(b) {
-    if (stage !== 2) return;
+    if (stage !== 2 || quizOpen) return;
     userRNA[activeSlot] = b;
-    if (activeSlot < 5) activeSlot++;
+    if (activeSlot < expectedRNA.length - 1) activeSlot++;
     renderBoard();
-    if (!userRNA.includes('?')) {
+    if (!userRNA.includes("?")) {
       const match = userRNA.every((val, i) => val === expectedRNA[i]);
       if (match) {
-        feedback.style.color = 'var(--success)';
-        feedback.textContent = 'Perfect hybridization! Cas9-gRNA RNP complex is locked onto the target DNA.';
-        setTimeout(() => {
-          instructions.innerHTML = `<strong>Stage 3 — Endonuclease Cleavage:</strong> Cas9's <strong>HNH</strong> and <strong>RuvC</strong> catalytic domains are aligned 3 base pairs upstream of the PAM sequence. Trigger the double-strand break (DSB).`;
+        feedback.style.color = "var(--success)";
+        feedback.textContent = "Perfect hybridization. Checkpoint before cleavage.";
+        pendingAdvance = () => {
+          instructions.innerHTML = `<strong>Stage 3 — Endonuclease cleavage:</strong> Cas9’s <strong>HNH</strong> and <strong>RuvC</strong> domains align ~3 bp upstream of the PAM. Trigger the double-strand break (DSB).`;
           setStageUI(3);
-        }, 1000);
+        };
+        showQuiz({
+          title: "Base pairing",
+          prompt: "In an RNA–DNA hybrid, which RNA base pairs with DNA adenine (A)?",
+          choices: [
+            { label: "U (uracil)", correct: true },
+            { label: "T (thymine)", correct: false },
+            { label: "G (guanine)", correct: false }
+          ],
+          success: "Correct — RNA uses U opposite A.",
+          fail: "Remember: RNA pairs A↔U (DNA still uses T)."
+        });
       } else {
-        feedback.style.color = 'var(--danger)';
-        feedback.textContent = 'Mismatch detected! Off-target risk is too high. Check RNA pairing rules (C→G, A→U, T→A).';
+        grnaAttempts++;
+        updateScore(-10);
+        feedback.style.color = "var(--danger)";
+        feedback.textContent = "Mismatch — off-target risk too high. Clear and retry (C→G, A→U, T→A).";
       }
     }
   }
+
   function renderControls() {
-    controls.innerHTML = '';
+    controls.innerHTML = "";
     if (stage === 2) {
-      ['A','U','C','G'].forEach(b => {
-        const btn = document.createElement('button');
+      ["A", "U", "C", "G"].forEach((b) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
         btn.textContent = `Add ${b}`;
         btn.onclick = () => inputRNABase(b);
         controls.appendChild(btn);
       });
-      const resetBtn = document.createElement('button');
-      resetBtn.className = 'secondary';
-      resetBtn.textContent = 'Clear RNA';
-      resetBtn.onclick = () => { userRNA = ['?','?','?','?','?','?']; activeSlot = 0; renderBoard(); };
+      const resetBtn = document.createElement("button");
+      resetBtn.type = "button";
+      resetBtn.className = "secondary";
+      resetBtn.textContent = "Clear RNA";
+      resetBtn.onclick = () => {
+        userRNA = Array(expectedRNA.length).fill("?");
+        activeSlot = 0;
+        renderBoard();
+      };
       controls.appendChild(resetBtn);
     } else if (stage === 3) {
-      const cutBtn = document.createElement('button');
-      cutBtn.className = 'danger';
-      cutBtn.textContent = '✂️ Activate Cas9 Cleavage (Cut DNA)';
+      const cutBtn = document.createElement("button");
+      cutBtn.type = "button";
+      cutBtn.className = "danger";
+      cutBtn.textContent = "Activate Cas9 cleavage";
       cutBtn.onclick = () => {
+        if (quizOpen) return;
         isCut = true;
         renderBoard();
-        feedback.style.color = 'var(--success)';
-        feedback.textContent = 'Double-Strand Break (DSB) created 3 bp upstream of PAM!';
+        feedback.style.color = "var(--success)";
+        feedback.textContent = "Double-strand break created ~3 bp upstream of PAM.";
         setTimeout(() => {
-          instructions.innerHTML = `<strong>Stage 4 — Cellular DNA Repair:</strong> The cell detects broken DNA. Choose a repair pathway depending on whether you want to <strong>knock out</strong> the gene or <strong>rewrite</strong> the mutation.`;
+          instructions.innerHTML = `<strong>Stage 4 — Cellular DNA repair:</strong> Choose a pathway — <strong>knock out</strong> (NHEJ) or <strong>rewrite</strong> with a donor (HDR).`;
           setStageUI(4);
         }, 1100);
       };
       controls.appendChild(cutBtn);
     } else if (stage === 4) {
-      const nhejBtn = document.createElement('button');
-      nhejBtn.className = 'secondary';
-      nhejBtn.textContent = '⚡ NHEJ (Gene Knockout)';
-      nhejBtn.onclick = () => finishRepair('NHEJ');
-      const hdrBtn = document.createElement('button');
-      hdrBtn.className = 'success';
-      hdrBtn.textContent = '🧬 HDR + Donor Template (Precision Correction)';
-      hdrBtn.onclick = () => finishRepair('HDR');
+      const nhejBtn = document.createElement("button");
+      nhejBtn.type = "button";
+      nhejBtn.className = "secondary";
+      nhejBtn.textContent = "NHEJ (gene knockout)";
+      nhejBtn.onclick = () => finishRepair("NHEJ");
+      const hdrBtn = document.createElement("button");
+      hdrBtn.type = "button";
+      hdrBtn.className = "success";
+      hdrBtn.textContent = "HDR + donor template";
+      hdrBtn.onclick = () => finishRepair("HDR");
       controls.appendChild(nhejBtn);
       controls.appendChild(hdrBtn);
     }
   }
+
   function finishRepair(mode) {
     isCut = false;
-    if (mode === 'NHEJ') {
-      topStrand[7] = 'C'; bottomStrand[7] = 'G'; // Indel mutation simulation
-      feedback.style.color = 'var(--pam)';
-      feedback.textContent = 'NHEJ Repair Complete: Random indel introduced! Frameshift mutation knocked out the gene.';
+    if (mode === "NHEJ") {
+      scenario.applyNhej(topStrand, bottomStrand);
+      feedback.style.color = "var(--warn)";
+      feedback.textContent = scenario.nhejNote;
     } else {
-      topStrand[4] = 'A'; bottomStrand[4] = 'T'; // Fix sickle A->T back to healthy
-      feedback.style.color = 'var(--success)';
-      feedback.textContent = 'HDR Repair Complete: Donor DNA integrated! Healthy HBB sequence restored.';
+      scenario.applyHdr(topStrand, bottomStrand);
+      feedback.style.color = "var(--success)";
+      feedback.textContent = scenario.hdrNote;
     }
     renderBoard();
-    controls.innerHTML = `<button onclick="location.reload()">🔄 Replay Simulation</button>`;
+    const { tier, blurb } = masteryTier();
+    masteryEl.classList.add("visible");
+    masteryEl.innerHTML = `
+      <div class="tier">${tier}</div>
+      <div style="color:var(--muted);font-size:0.9rem;margin-bottom:8px;">Score ${score}/100 · Scenario ${scenario.name} · Pathway ${mode}</div>
+      <div style="font-size:0.88rem;">${blurb}</div>
+    `;
+    controls.innerHTML = "";
+    const replay = document.createElement("button");
+    replay.type = "button";
+    replay.textContent = "Replay this scenario";
+    replay.onclick = () => resetScenario(scenario.id);
+    const other = document.createElement("button");
+    other.type = "button";
+    other.className = "secondary";
+    other.textContent = scenario.id === "hbb" ? "Try CFTR scenario" : "Try HBB scenario";
+    other.onclick = () => resetScenario(scenario.id === "hbb" ? "cftr" : "hbb");
+    controls.appendChild(replay);
+    controls.appendChild(other);
   }
-  // Initialize
-  setStageUI(1);
+
+  resetScenario("hbb");
 </script>
 </body>
 </html>
