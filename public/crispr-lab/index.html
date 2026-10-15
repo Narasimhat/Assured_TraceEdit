@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRISPR-Cas9 Interactive Lab</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --pam: #f59e0b;
+      --a: #ef4444;
+      --t: #3b82f6;
+      --c: #eab308;
+      --g: #22c55e;
+      --u: #a855f7;
+    }
+    * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body {
+      margin: 0; padding: 20px;
+      background-color: var(--bg); color: var(--text);
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .container { max-width: 900px; width: 100%; }
+    header {
+      text-align: center; margin-bottom: 24px;
+      border-bottom: 1px solid #334155; padding-bottom: 16px;
+    }
+    h1 { margin: 0; color: var(--accent); font-size: 1.8rem; }
+    .subtitle { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
+    
+    .stage-tracker {
+      display: flex; justify-content: space-between; margin-bottom: 24px;
+      background: var(--card); padding: 12px 20px; border-radius: 10px;
+    }
+    .step { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+    .step.active { color: var(--accent); text-decoration: underline; text-underline-offset: 6px; }
+    .step.done { color: var(--success); }
+    .workspace {
+      background: var(--card); padding: 24px; border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4); margin-bottom: 20px;
+    }
+    .instruction-box {
+      background: #0f172a; border-left: 4px solid var(--accent);
+      padding: 14px 18px; border-radius: 6px; margin-bottom: 24px;
+      line-height: 1.5; font-size: 0.95rem;
+    }
+    .dna-container {
+      display: flex; flex-direction: column; gap: 8px;
+      overflow-x: auto; padding: 16px 0; align-items: center;
+    }
+    .strand-row { display: flex; gap: 6px; align-items: center; }
+    .strand-label { width: 90px; font-size: 0.8rem; color: var(--muted); font-weight: bold; }
+    
+    .base {
+      width: 38px; height: 42px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold; font-size: 1.1rem; color: #fff;
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+      user-select: none; position: relative;
+    }
+    .base:hover { transform: translateY(-2px); }
+    .base-A { background: var(--a); }
+    .base-T { background: var(--t); }
+    .base-C { background: var(--c); color: #0f172a; }
+    .base-G { background: var(--g); color: #0f172a; }
+    .base-U { background: var(--u); }
+    .base-empty { background: #334155; border: 2px dashed #64748b; color: #94a3b8; }
+    .pam-highlight { outline: 3px solid var(--pam); box-shadow: 0 0 12px var(--pam); }
+    .target-highlight { outline: 2px dashed var(--accent); }
+    .cut-gap { margin-right: 22px; transition: margin 0.4s ease; }
+    .controls {
+      display: flex; gap: 12px; justify-content: center; margin-top: 20px; flex-wrap: wrap;
+    }
+    button {
+      background: var(--accent); color: #0f172a; border: none;
+      padding: 10px 20px; border-radius: 8px; font-weight: 700;
+      cursor: pointer; font-size: 0.95rem; transition: opacity 0.2s, transform 0.1s;
+    }
+    button:hover { opacity: 0.9; }
+    button:active { transform: scale(0.98); }
+    button.secondary { background: #475569; color: #fff; }
+    button.danger { background: var(--danger); color: #fff; }
+    button.success { background: var(--success); color: #0f172a; }
+    .feedback {
+      text-align: center; margin-top: 16px; font-weight: 600; min-height: 24px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🧬 CRISPR-Cas9 Virtual Bench</h1>
+    <div class="subtitle">Interactive Molecular Gene Editing Simulator</div>
+  </header>
+  <div class="stage-tracker">
+    <div class="step active" id="st-1">1. Locate PAM</div>
+    <div class="step" id="st-2">2. Design gRNA</div>
+    <div class="step" id="st-3">3. Cas9 Cleavage</div>
+    <div class="step" id="st-4">4. DNA Repair</div>
+  </div>
+  <div class="workspace">
+    <div class="instruction-box" id="instructions">
+      <strong>Mission:</strong> A patient has a sickle-cell point mutation in the <em>HBB</em> gene. Before Cas9 can unwind DNA, it must bind to a <strong>PAM sequence (5'-NGG-3')</strong> on the non-target strand (where N is any base followed by two Guanines). Click the first base of the <strong>AGG</strong> PAM sequence on the top strand (Indices 9–11).
+    </div>
+    <div class="dna-container" id="dna-board"></div>
+    <div class="controls" id="control-panel"></div>
+    <div class="feedback" id="feedback"></div>
+  </div>
+</div>
+<script>
+  // Top strand (5' -> 3'): Target region is indices 3..8 (6 bases for fast gameplay), PAM is indices 9..11 (AGG)
+  const topStrand =    ['C','A','T','G','T','G','A','G','T','A','G','G','C','T'];
+  const bottomStrand = ['G','T','A','C','A','C','T','C','A','T','C','C','G','A'];
+  // Target template on bottom strand (3' -> 5'): indices 3..8 are C, A, C, T, C, A
+  // Correct complementary gRNA (5' -> 3'): G, U, G, A, G, U
+  const expectedRNA = ['G','U','G','A','G','U'];
+  let userRNA = ['?','?','?','?','?','?'];
+  let activeSlot = 0;
+  let stage = 1;
+  let isCut = false;
+  const board = document.getElementById('dna-board');
+  const instructions = document.getElementById('instructions');
+  const controls = document.getElementById('control-panel');
+  const feedback = document.getElementById('feedback');
+  function setStageUI(s) {
+    stage = s;
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById(`st-${i}`);
+      el.className = 'step' + (i === s ? ' active' : (i < s ? ' done' : ''));
+    }
+    feedback.textContent = '';
+    renderBoard();
+    renderControls();
+  }
+  function renderBoard() {
+    board.innerHTML = '';
+    // Top Strand (5' -> 3' Non-Target / PAM Strand)
+    const topRow = document.createElement('div');
+    topRow.className = 'strand-row';
+    topRow.innerHTML = `<div class="strand-label">5' Top 3'</div>`;
+    topStrand.forEach((base, idx) => {
+      const el = document.createElement('div');
+      el.className = `base base-${base}`;
+      if (stage >= 2 && idx >= 9 && idx <= 11) el.classList.add('pam-highlight');
+      if (isCut && idx === 7) el.classList.add('cut-gap');
+      el.textContent = base;
+      el.onclick = () => handleTopStrandClick(idx);
+      topRow.appendChild(el);
+    });
+    board.appendChild(topRow);
+    // gRNA Strand Row (Visible in Stages 2 & 3)
+    if (stage === 2 || stage === 3) {
+      const rnaRow = document.createElement('div');
+      rnaRow.className = 'strand-row';
+      rnaRow.innerHTML = `<div class="strand-label" style="color:#a855f7;">5' gRNA 3'</div>`;
+      for (let i = 0; i < topStrand.length; i++) {
+        if (i >= 3 && i <= 8) {
+          const rIdx = i - 3;
+          const val = userRNA[rIdx];
+          const el = document.createElement('div');
+          el.className = `base ${val === '?' ? 'base-empty' : 'base-' + val}`;
+          if (stage === 2 && rIdx === activeSlot) el.style.outline = '2px solid #fff';
+          el.textContent = val;
+          el.onclick = () => { if (stage === 2) { activeSlot = rIdx; renderBoard(); } };
+          rnaRow.appendChild(el);
+        } else {
+          const spacer = document.createElement('div');
+          spacer.style.width = '38px';
+          rnaRow.appendChild(spacer);
+        }
+      }
+      board.appendChild(rnaRow);
+    }
+    // Bottom Strand (3' -> 5' Target Strand)
+    const botRow = document.createElement('div');
+    botRow.className = 'strand-row';
+    botRow.innerHTML = `<div class="strand-label">3' Bottom 5'</div>`;
+    bottomStrand.forEach((base, idx) => {
+      const el = document.createElement('div');
+      el.className = `base base-${base}`;
+      if (stage === 2 && idx >= 3 && idx <= 8) el.classList.add('target-highlight');
+      if (isCut && idx === 7) el.classList.add('cut-gap');
+      el.textContent = base;
+      botRow.appendChild(el);
+    });
+    board.appendChild(botRow);
+  }
+  function handleTopStrandClick(idx) {
+    if (stage !== 1) return;
+    if (idx >= 9 && idx <= 11) {
+      feedback.style.color = 'var(--success)';
+      feedback.textContent = 'PAM Sequence (5\'-AGG-3\') locked! Advancing to gRNA synthesis...';
+      setTimeout(() => {
+        instructions.innerHTML = `<strong>Stage 2 — Synthesize Guide RNA (sgRNA):</strong> Match the 6-base target region on the <strong>3' Bottom Strand</strong> (dashed boxes: <code>C-A-C-T-C-A</code>) using RNA bases (remember: <strong>A pairs with U</strong>, T pairs with A, C pairs with G).`;
+        setStageUI(2);
+      }, 900);
+    } else {
+      feedback.style.color = 'var(--danger)';
+      feedback.textContent = 'Not a valid NGG PAM site downstream of the mutation. Look at bases 10–12 (A-G-G).';
+    }
+  }
+  function inputRNABase(b) {
+    if (stage !== 2) return;
+    userRNA[activeSlot] = b;
+    if (activeSlot < 5) activeSlot++;
+    renderBoard();
+    if (!userRNA.includes('?')) {
+      const match = userRNA.every((val, i) => val === expectedRNA[i]);
+      if (match) {
+        feedback.style.color = 'var(--success)';
+        feedback.textContent = 'Perfect hybridization! Cas9-gRNA RNP complex is locked onto the target DNA.';
+        setTimeout(() => {
+          instructions.innerHTML = `<strong>Stage 3 — Endonuclease Cleavage:</strong> Cas9's <strong>HNH</strong> and <strong>RuvC</strong> catalytic domains are aligned 3 base pairs upstream of the PAM sequence. Trigger the double-strand break (DSB).`;
+          setStageUI(3);
+        }, 1000);
+      } else {
+        feedback.style.color = 'var(--danger)';
+        feedback.textContent = 'Mismatch detected! Off-target risk is too high. Check RNA pairing rules (C→G, A→U, T→A).';
+      }
+    }
+  }
+  function renderControls() {
+    controls.innerHTML = '';
+    if (stage === 2) {
+      ['A','U','C','G'].forEach(b => {
+        const btn = document.createElement('button');
+        btn.textContent = `Add ${b}`;
+        btn.onclick = () => inputRNABase(b);
+        controls.appendChild(btn);
+      });
+      const resetBtn = document.createElement('button');
+      resetBtn.className = 'secondary';
+      resetBtn.textContent = 'Clear RNA';
+      resetBtn.onclick = () => { userRNA = ['?','?','?','?','?','?']; activeSlot = 0; renderBoard(); };
+      controls.appendChild(resetBtn);
+    } else if (stage === 3) {
+      const cutBtn = document.createElement('button');
+      cutBtn.className = 'danger';
+      cutBtn.textContent = '✂️ Activate Cas9 Cleavage (Cut DNA)';
+      cutBtn.onclick = () => {
+        isCut = true;
+        renderBoard();
+        feedback.style.color = 'var(--success)';
+        feedback.textContent = 'Double-Strand Break (DSB) created 3 bp upstream of PAM!';
+        setTimeout(() => {
+          instructions.innerHTML = `<strong>Stage 4 — Cellular DNA Repair:</strong> The cell detects broken DNA. Choose a repair pathway depending on whether you want to <strong>knock out</strong> the gene or <strong>rewrite</strong> the mutation.`;
+          setStageUI(4);
+        }, 1100);
+      };
+      controls.appendChild(cutBtn);
+    } else if (stage === 4) {
+      const nhejBtn = document.createElement('button');
+      nhejBtn.className = 'secondary';
+      nhejBtn.textContent = '⚡ NHEJ (Gene Knockout)';
+      nhejBtn.onclick = () => finishRepair('NHEJ');
+      const hdrBtn = document.createElement('button');
+      hdrBtn.className = 'success';
+      hdrBtn.textContent = '🧬 HDR + Donor Template (Precision Correction)';
+      hdrBtn.onclick = () => finishRepair('HDR');
+      controls.appendChild(nhejBtn);
+      controls.appendChild(hdrBtn);
+    }
+  }
+  function finishRepair(mode) {
+    isCut = false;
+    if (mode === 'NHEJ') {
+      topStrand[7] = 'C'; bottomStrand[7] = 'G'; // Indel mutation simulation
+      feedback.style.color = 'var(--pam)';
+      feedback.textContent = 'NHEJ Repair Complete: Random indel introduced! Frameshift mutation knocked out the gene.';
+    } else {
+      topStrand[4] = 'A'; bottomStrand[4] = 'T'; // Fix sickle A->T back to healthy
+      feedback.style.color = 'var(--success)';
+      feedback.textContent = 'HDR Repair Complete: Donor DNA integrated! Healthy HBB sequence restored.';
+    }
+    renderBoard();
+    controls.innerHTML = `<button onclick="location.reload()">🔄 Replay Simulation</button>`;
+  }
+  // Initialize
+  setStageUI(1);
+</script>
+</body>
+</html>
